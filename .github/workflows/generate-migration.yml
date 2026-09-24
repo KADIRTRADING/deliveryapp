@@ -1,0 +1,65 @@
+name: Generate Prisma Migration
+
+# Manually-triggered utility workflow. This sandbox environment cannot run
+# `prisma migrate dev` locally (no local Postgres, no package-registry
+# network access), so migration files are generated here — against a real
+# Postgres instance, on GitHub's infrastructure — and committed back to the
+# target branch. Run this whenever schema.prisma changes and a new migration
+# needs to be captured.
+#
+# Usage: trigger via `gh api repos/{owner}/{repo}/actions/workflows/generate-migration.yml/dispatches -f ref=<branch> -f "inputs[migrationName]=<name>"`
+
+on:
+  workflow_dispatch:
+    inputs:
+      migrationName:
+        description: "Migration name (e.g. init, add_search_fields)"
+        required: true
+        type: string
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: deliveryapp
+          POSTGRES_PASSWORD: deliveryapp
+          POSTGRES_DB: deliveryapp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U deliveryapp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://deliveryapp:deliveryapp@localhost:5432/deliveryapp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate migration
+        run: npx prisma migrate dev --name "${{ inputs.migrationName }}" --skip-seed
+
+      - name: Commit and push migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prisma/migrations
+          if git diff --cached --quiet; then
+            echo "No migration changes to commit."
+          else
+            git commit -m "chore(prisma): generate migration '${{ inputs.migrationName }}'"
+            git push origin HEAD:"${{ github.ref_name }}"
+          fi
