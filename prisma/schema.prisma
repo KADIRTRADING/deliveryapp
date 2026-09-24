@@ -380,6 +380,14 @@ model Restaurant {
   commissionBps  Int              @default(1500) // basis points, e.g. 1500 = 15.00%
   ratingAvg      Float            @default(0)
   ratingCount    Int              @default(0)
+  /// Precomputed, locale-normalized (Uzbek/Russian/English) concatenation of
+  /// searchable text (name + description in all three locales), maintained
+  /// automatically on create/update — never trust a client-supplied search
+  /// index. See src/lib/search-normalize.ts. Enables case- and
+  /// apostrophe-variant-insensitive search without depending on a Postgres
+  /// extension (pg_trgm/unaccent) that may not be available in every
+  /// deployment target.
+  searchText     String           @default("")
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   deletedAt      DateTime?
@@ -397,6 +405,7 @@ model Restaurant {
   carts           Cart[]
 
   @@index([status])
+  @@index([searchText])
   @@map("restaurants")
 }
 
@@ -522,6 +531,8 @@ model Product {
   discountedPrice  Int?
   isAvailable      Boolean   @default(true)
   sortOrder        Int       @default(0)
+  /// Precomputed, locale-normalized search text — see Restaurant.searchText.
+  searchText       String    @default("")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
@@ -540,6 +551,7 @@ model Product {
   @@index([restaurantId])
   @@index([menuCategoryId])
   @@index([isAvailable])
+  @@index([searchText])
   @@map("products")
 }
 

@@ -28,6 +28,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/password";
+import { buildSearchText } from "../src/lib/search-normalize";
 
 const prisma = new PrismaClient();
 
@@ -358,18 +359,33 @@ async function seedDemoRestaurant(
     },
   });
 
+  const restaurantNameUz = "[DEMO] Osh Markazi";
+  const restaurantNameRu = "[DEMO] Ош Маркази";
+  const restaurantNameEn = "[DEMO] Osh Markazi";
+  const restaurantDescUz = "Andozali oʻzbek taomlari — demo restoran.";
+  const restaurantDescRu = "Традиционная узбекская кухня — демо-ресторан.";
+  const restaurantDescEn = "Traditional Uzbek cuisine — demo restaurant seed data.";
+
   const existing = await prisma.restaurant.findUnique({ where: { slug: "demo-osh-markazi" } });
   const restaurant =
     existing ??
     (await prisma.restaurant.create({
       data: {
         slug: "demo-osh-markazi",
-        nameUz: "[DEMO] Osh Markazi",
-        nameRu: "[DEMO] Ош Маркази",
-        nameEn: "[DEMO] Osh Markazi",
-        descriptionUz: "Andozali oʻzbek taomlari — demo restoran.",
-        descriptionRu: "Традиционная узбекская кухня — демо-ресторан.",
-        descriptionEn: "Traditional Uzbek cuisine — demo restaurant seed data.",
+        nameUz: restaurantNameUz,
+        nameRu: restaurantNameRu,
+        nameEn: restaurantNameEn,
+        descriptionUz: restaurantDescUz,
+        descriptionRu: restaurantDescRu,
+        descriptionEn: restaurantDescEn,
+        searchText: buildSearchText(
+          restaurantNameUz,
+          restaurantNameRu,
+          restaurantNameEn,
+          restaurantDescUz,
+          restaurantDescRu,
+          restaurantDescEn,
+        ),
         status: "APPROVED",
         restaurantUsers: { create: [{ userId: ownerId, role: "OWNER" }] },
         categoryLinks: { create: [{ categoryId: category.id }] },
@@ -455,6 +471,104 @@ async function seedDemoRestaurant(
   return restaurant;
 }
 
+async function seedDemoMenu(restaurantId: string) {
+  const category = await prisma.menuCategory.findFirst({
+    where: { restaurantId, nameEn: "[DEMO] Main Dishes" },
+  });
+  const mainDishes =
+    category ??
+    (await prisma.menuCategory.create({
+      data: {
+        restaurantId,
+        nameUz: "[DEMO] Asosiy taomlar",
+        nameRu: "[DEMO] Основные блюда",
+        nameEn: "[DEMO] Main Dishes",
+        sortOrder: 1,
+      },
+    }));
+
+  const existingProduct = await prisma.product.findFirst({
+    where: { restaurantId, nameEn: "[DEMO] Uzbek Plov" },
+  });
+  if (existingProduct) return;
+
+  const plovNameUz = "[DEMO] Oʻzbek Palovi";
+  const plovNameRu = "[DEMO] Узбекский плов";
+  const plovNameEn = "[DEMO] Uzbek Plov";
+  const plovDescUz = "Qazi, sabzi va bedana tuxumi bilan andozali palov.";
+  const plovDescRu = "Традиционный плов с казы, морковью и перепелиными яйцами.";
+  const plovDescEn = "Traditional plov with beef, carrots, and quail eggs.";
+
+  await prisma.product.create({
+    data: {
+      restaurantId,
+      menuCategoryId: mainDishes.id,
+      nameUz: plovNameUz,
+      nameRu: plovNameRu,
+      nameEn: plovNameEn,
+      descriptionUz: plovDescUz,
+      descriptionRu: plovDescRu,
+      descriptionEn: plovDescEn,
+      basePrice: 35000,
+      discountedPrice: 29000,
+      searchText: buildSearchText(
+        plovNameUz,
+        plovNameRu,
+        plovNameEn,
+        plovDescUz,
+        plovDescRu,
+        plovDescEn,
+      ),
+      variants: {
+        create: [
+          {
+            nameUz: "Kichik",
+            nameRu: "Маленькая",
+            nameEn: "Small",
+            priceDelta: 0,
+            isDefault: true,
+          },
+          {
+            nameUz: "Katta",
+            nameRu: "Большая",
+            nameEn: "Large",
+            priceDelta: 15000,
+            sortOrder: 1,
+          },
+        ],
+      },
+      modifierGroups: {
+        create: [
+          {
+            nameUz: "Qoʻshimchalar",
+            nameRu: "Добавки",
+            nameEn: "Extras",
+            minSelect: 0,
+            maxSelect: 3,
+            options: {
+              create: [
+                {
+                  nameUz: "Qoʻshimcha qazi",
+                  nameRu: "Доп. казы",
+                  nameEn: "Extra beef",
+                  priceDelta: 8000,
+                },
+                {
+                  nameUz: "Qoʻshimcha salat",
+                  nameRu: "Доп. салат",
+                  nameEn: "Extra salad",
+                  priceDelta: 5000,
+                  sortOrder: 1,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+}
+
 async function main() {
   console.log("🌱 Seeding Uzbekistan location hierarchy, users, and demo restaurant...");
 
@@ -469,6 +583,9 @@ async function main() {
 
   const restaurant = await seedDemoRestaurant(owner.id, locations);
   console.log(`✅ Demo restaurant ready: ${restaurant.slug} (2 branches: Tashkent, Samarqand)`);
+
+  await seedDemoMenu(restaurant.id);
+  console.log("✅ Demo menu ready: 1 category, 1 product with variants + modifiers");
 
   console.log("🌱 Seed complete.");
 }

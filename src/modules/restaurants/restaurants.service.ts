@@ -1,11 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api-error";
-import { haversineDistanceMeters, isPointInPolygon, isWithinRadius } from "@/lib/geo";
+import { buildSearchText } from "@/lib/search-normalize";
 import type { AuthSession } from "@/modules/auth/rbac";
 import { isAdmin } from "@/modules/auth/rbac";
 import { restaurantListQuerySchema } from "@/modules/restaurants/schemas";
 import type { CreateRestaurantInput, UpdateRestaurantInput } from "@/modules/restaurants/schemas";
+import { computeServiceability } from "@/modules/restaurants/serviceability";
 import type { z } from "zod";
 
 type RestaurantListQuery = z.infer<typeof restaurantListQuerySchema>;
@@ -33,6 +34,14 @@ export async function createRestaurant(session: AuthSession, input: CreateRestau
       descriptionUz: input.descriptionUz ?? null,
       descriptionRu: input.descriptionRu ?? null,
       descriptionEn: input.descriptionEn ?? null,
+      searchText: buildSearchText(
+        input.nameUz,
+        input.nameRu,
+        input.nameEn,
+        input.descriptionUz,
+        input.descriptionRu,
+        input.descriptionEn,
+      ),
       status: "PENDING",
       restaurantUsers: {
         create: [{ userId: session.user.id, role: "OWNER" }],
@@ -50,6 +59,15 @@ export async function updateRestaurant(restaurantId: string, input: UpdateRestau
   if (!restaurant || restaurant.deletedAt) {
     throw ApiError.notFound("Restaurant not found");
   }
+
+  const searchText = buildSearchText(
+    input.nameUz ?? restaurant.nameUz,
+    input.nameRu ?? restaurant.nameRu,
+    input.nameEn ?? restaurant.nameEn,
+    input.descriptionUz !== undefined ? input.descriptionUz : restaurant.descriptionUz,
+    input.descriptionRu !== undefined ? input.descriptionRu : restaurant.descriptionRu,
+    input.descriptionEn !== undefined ? input.descriptionEn : restaurant.descriptionEn,
+  );
 
   return prisma.$transaction(async (tx) => {
     if (input.categoryIds) {
@@ -70,6 +88,7 @@ export async function updateRestaurant(restaurantId: string, input: UpdateRestau
         descriptionEn: input.descriptionEn,
         logoUrl: input.logoUrl,
         coverUrl: input.coverUrl,
+        searchText,
       },
       include: { categoryLinks: { include: { category: true } }, branches: true },
     });
@@ -187,40 +206,14 @@ export async function listServiceableRestaurants(query: RestaurantListQuery) {
     orderBy: { ratingAvg: "desc" },
   });
 
+  const point =
+    lat !== undefined && lng !== undefined ? { latitude: lat, longitude: lng } : undefined;
+
   const withServiceability = restaurants.map((restaurant) => {
-    let nearestBranchDistanceMeters: number | null = null;
-    let isServiceable = lat === undefined || lng === undefined; // no location = browse mode
-
-    for (const branch of restaurant.branches) {
-      if (lat !== undefined && lng !== undefined) {
-        const distance = haversineDistanceMeters(
-          { latitude: lat, longitude: lng },
-          { latitude: branch.latitude, longitude: branch.longitude },
-        );
-        if (nearestBranchDistanceMeters === null || distance < nearestBranchDistanceMeters) {
-          nearestBranchDistanceMeters = distance;
-        }
-
-        const servesPoint = branch.deliveryZones.some((zone) => {
-          if (zone.type === "RADIUS" && zone.radiusMeters) {
-            return isWithinRadius(
-              { latitude: lat, longitude: lng },
-              { latitude: branch.latitude, longitude: branch.longitude },
-              zone.radiusMeters,
-            );
-          }
-          if (zone.type === "POLYGON" && Array.isArray(zone.polygon)) {
-            return isPointInPolygon(
-              { latitude: lat, longitude: lng },
-              zone.polygon as Array<[number, number]>,
-            );
-          }
-          return false;
-        });
-        if (servesPoint) isServiceable = true;
-      }
-    }
-
+    const { isServiceable, nearestBranchDistanceMeters } = computeServiceability(
+      restaurant.branches,
+      point,
+    );
     return { restaurant, isServiceable, nearestBranchDistanceMeters };
   });
 
