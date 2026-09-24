@@ -1,7 +1,27 @@
-import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
-import { promisify } from "node:util";
+import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
 
-const scryptAsync = promisify(scrypt);
+/**
+ * `util.promisify(scrypt)` resolves to an overload of `scrypt` whose
+ * signature doesn't accept an options object as a plain promisified
+ * function (TypeScript picks a narrower overload), so we wrap it explicitly
+ * instead of relying on `promisify`.
+ */
+function scryptAsync(
+  password: string,
+  salt: Buffer,
+  keylen: number,
+  options: ScryptOptions,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, options, (err, derivedKey) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(derivedKey);
+    });
+  });
+}
 
 /**
  * Password hashing using Node's built-in `scrypt` KDF.
@@ -25,12 +45,12 @@ const SALT_LENGTH = 16;
 
 export async function hashPassword(plain: string): Promise<string> {
   const salt = randomBytes(SALT_LENGTH);
-  const derivedKey = (await scryptAsync(plain.normalize("NFKC"), salt, KEY_LENGTH, {
+  const derivedKey = await scryptAsync(plain.normalize("NFKC"), salt, KEY_LENGTH, {
     N: SCRYPT_N,
     r: SCRYPT_R,
     p: SCRYPT_P,
     maxmem: 64 * 1024 * 1024,
-  })) as Buffer;
+  });
 
   return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString("hex")}$${derivedKey.toString(
     "hex",
@@ -51,12 +71,12 @@ export async function verifyPassword(plain: string, stored: string): Promise<boo
   const expected = Buffer.from(hashHex ?? "", "hex");
   if (salt.length === 0 || expected.length === 0) return false;
 
-  const derivedKey = (await scryptAsync(plain.normalize("NFKC"), salt, expected.length, {
+  const derivedKey = await scryptAsync(plain.normalize("NFKC"), salt, expected.length, {
     N,
     r,
     p,
     maxmem: 64 * 1024 * 1024,
-  })) as Buffer;
+  });
 
   if (derivedKey.length !== expected.length) return false;
   return timingSafeEqual(derivedKey, expected);

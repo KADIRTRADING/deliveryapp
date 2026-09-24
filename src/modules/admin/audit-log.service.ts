@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export interface AuditLogInput {
@@ -6,7 +7,7 @@ export interface AuditLogInput {
   action: string;
   entityType: string;
   entityId?: string | null;
-  metadata?: Record<string, unknown> | null;
+  metadata?: Prisma.InputJsonValue | null;
   ipAddress?: string | null;
 }
 
