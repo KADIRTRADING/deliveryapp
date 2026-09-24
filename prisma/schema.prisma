@@ -394,6 +394,7 @@ model Restaurant {
   favorites       Favorite[]
   reviews         Review[]
   orders          Order[]
+  carts           Cart[]
 
   @@index([status])
   @@map("restaurants")
