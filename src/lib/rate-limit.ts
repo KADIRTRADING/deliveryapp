@@ -54,6 +54,9 @@ export const RateLimits = {
   registerPerIp: (ip: string) => rateLimit(`register:ip:${ip}`, 10, 60 * 60),
   passwordResetPerIp: (ip: string) => rateLimit(`pwreset:ip:${ip}`, 8, 60 * 60),
   apiWritePerUser: (userId: string) => rateLimit(`api:write:${userId}`, 120, 60),
+  // Geocoding calls a paid external API in production (Mapbox); throttle
+  // per-IP to bound cost exposure from a single abusive client.
+  geocodePerIp: (ip: string) => rateLimit(`geocode:ip:${ip}`, 30, 60),
 };
 
 export function getClientIp(headers: Headers): string {
