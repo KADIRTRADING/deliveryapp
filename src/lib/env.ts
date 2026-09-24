@@ -48,9 +48,9 @@ const envSchema = z.object({
   MAPBOX_SERVER_TOKEN: z.string().optional(),
 
   // --- Payment providers (abstracted; dev adapters used when creds absent) ---
-  PAYMENT_DEFAULT_PROVIDER: z.enum(["mock", "payme", "click"]).default(
-    isProduction ? "payme" : "mock",
-  ),
+  PAYMENT_DEFAULT_PROVIDER: z
+    .enum(["mock", "payme", "click"])
+    .default(isProduction ? "payme" : "mock"),
   PAYME_MERCHANT_ID: z.string().optional(),
   PAYME_SECRET_KEY: z.string().optional(),
   CLICK_MERCHANT_ID: z.string().optional(),

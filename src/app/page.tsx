@@ -14,8 +14,8 @@ export default async function HomePage() {
       <h1 className="text-3xl font-bold text-brand-600">{t("heroTitle")}</h1>
       <p className="max-w-md text-ink-500">{t("heroSubtitle")}</p>
       <div className="mt-4 rounded-xl2 border border-ink-100 bg-white px-6 py-4 text-sm text-ink-400">
-        Phase 1 foundation: authentication, RBAC, and core infrastructure are live.
-        Restaurant discovery and the map/location UI arrive in Phase 2.
+        Phase 1 foundation: authentication, RBAC, and core infrastructure are live. Restaurant
+        discovery and the map/location UI arrive in Phase 2.
       </div>
     </main>
   );

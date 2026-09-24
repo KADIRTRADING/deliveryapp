@@ -63,17 +63,17 @@ still being a real, working implementation in development.
 
 ## Tech Stack
 
-| Concern | Choice | Why |
-|---|---|---|
-| Language | TypeScript (strict mode) | Type safety across the full stack |
-| Framework | Next.js 15 (App Router) | API routes + SSR from one codebase; React Native can consume the same REST API later |
-| ORM | Prisma 6 + PostgreSQL | Strong typing, migrations, transactions |
-| Cache/Sessions/Queues | Redis (ioredis) | Rate limiting now; queues/pub-sub for realtime in later phases |
-| Object storage | S3-compatible (MinIO locally) | `StorageProvider` interface, swappable to AWS S3/DO Spaces in prod |
-| Validation | Zod | Single source of truth for input validation, shared error shape |
-| Styling | Tailwind CSS | Utility-first, fast iteration, small CSS payload |
-| i18n | next-intl | uz (default) / ru / en, JSON message catalogs, no hard-coded UI strings |
-| Testing | Vitest | Fast, native ESM/TS support |
+| Concern               | Choice                        | Why                                                                                  |
+| --------------------- | ----------------------------- | ------------------------------------------------------------------------------------ |
+| Language              | TypeScript (strict mode)      | Type safety across the full stack                                                    |
+| Framework             | Next.js 15 (App Router)       | API routes + SSR from one codebase; React Native can consume the same REST API later |
+| ORM                   | Prisma 6 + PostgreSQL         | Strong typing, migrations, transactions                                              |
+| Cache/Sessions/Queues | Redis (ioredis)               | Rate limiting now; queues/pub-sub for realtime in later phases                       |
+| Object storage        | S3-compatible (MinIO locally) | `StorageProvider` interface, swappable to AWS S3/DO Spaces in prod                   |
+| Validation            | Zod                           | Single source of truth for input validation, shared error shape                      |
+| Styling               | Tailwind CSS                  | Utility-first, fast iteration, small CSS payload                                     |
+| i18n                  | next-intl                     | uz (default) / ru / en, JSON message catalogs, no hard-coded UI strings              |
+| Testing               | Vitest                        | Fast, native ESM/TS support                                                          |
 
 We pinned **Next.js 15 / Prisma 6** rather than the newest Next 16 / Prisma 7
 majors: both introduced significant breaking changes very recently (Next 16
@@ -126,6 +126,7 @@ handling real orders and payments must never boot into a half-configured
 state.
 
 Key points:
+
 - `STORAGE_PROVIDER`, `MAP_PROVIDER`, `PAYMENT_DEFAULT_PROVIDER`, and
   `SMS_PROVIDER` each default to a safe mock/console adapter in development
   and require real credentials in production (`NODE_ENV=production`). If a
@@ -146,6 +147,7 @@ promotions/promo codes, reviews, favorites, notifications, support tickets,
 and an append-only audit log.
 
 Conventions:
+
 - All monetary values are `Int` (whole UZS) — never floats — per the
   financial-correctness requirement.
 - Soft deletion (`deletedAt`) is used for records with historical/financial
@@ -216,12 +218,12 @@ requirements.
 
 ## Provider Abstractions
 
-| Interface | Location | Dev/Test adapter | Production adapter |
-|---|---|---|---|
-| `SmsProvider` | `src/modules/notifications/sms-provider.ts` | `ConsoleSmsProvider` (logs OTP to server console) | `EskizSmsProvider` (Eskiz.uz gateway) |
-| `PaymentProvider` | *(Phase 7)* | Mock simulator, no real charges | Payme / Click adapters |
-| `StorageProvider` | *(Phase 3)* | In-memory mock | S3-compatible (MinIO locally, AWS S3/DO Spaces in prod) |
-| `MapProvider` | *(Phase 2)* | Functional stub, no external calls | Mapbox (server-side token only) |
+| Interface         | Location                                    | Dev/Test adapter                                  | Production adapter                                      |
+| ----------------- | ------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------- |
+| `SmsProvider`     | `src/modules/notifications/sms-provider.ts` | `ConsoleSmsProvider` (logs OTP to server console) | `EskizSmsProvider` (Eskiz.uz gateway)                   |
+| `PaymentProvider` | _(Phase 7)_                                 | Mock simulator, no real charges                   | Payme / Click adapters                                  |
+| `StorageProvider` | _(Phase 3)_                                 | In-memory mock                                    | S3-compatible (MinIO locally, AWS S3/DO Spaces in prod) |
+| `MapProvider`     | _(Phase 2)_                                 | Functional stub, no external calls                | Mapbox (server-side token only)                         |
 
 Each adapter is selected purely by environment variable
 (`SMS_PROVIDER`, `PAYMENT_DEFAULT_PROVIDER`, `STORAGE_PROVIDER`, `MAP_PROVIDER`)
@@ -239,18 +241,18 @@ resolved server-side from the `NEXT_LOCALE` cookie in
 
 Implemented in Phase 1 (all under `/api`):
 
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/auth/register` | POST | Create a CUSTOMER account, start a session |
-| `/api/auth/login` | POST | Authenticate by phone + password |
-| `/api/auth/logout` | POST | Revoke the current session |
-| `/api/auth/me` | GET | Fetch the authenticated user (session-derived) |
-| `/api/auth/otp/request` | POST | Send a phone verification/login/reset OTP |
-| `/api/auth/otp/verify` | POST | Verify an OTP code |
-| `/api/auth/password/forgot` | POST | Request a password reset link |
-| `/api/auth/password/reset` | POST | Reset password with a valid reset token |
-| `/api/users/me` | GET/PATCH | View/edit the authenticated user's own profile |
-| `/api/users/me/password` | POST | Change password (requires current password) |
+| Route                       | Method    | Purpose                                        |
+| --------------------------- | --------- | ---------------------------------------------- |
+| `/api/auth/register`        | POST      | Create a CUSTOMER account, start a session     |
+| `/api/auth/login`           | POST      | Authenticate by phone + password               |
+| `/api/auth/logout`          | POST      | Revoke the current session                     |
+| `/api/auth/me`              | GET       | Fetch the authenticated user (session-derived) |
+| `/api/auth/otp/request`     | POST      | Send a phone verification/login/reset OTP      |
+| `/api/auth/otp/verify`      | POST      | Verify an OTP code                             |
+| `/api/auth/password/forgot` | POST      | Request a password reset link                  |
+| `/api/auth/password/reset`  | POST      | Reset password with a valid reset token        |
+| `/api/users/me`             | GET/PATCH | View/edit the authenticated user's own profile |
+| `/api/users/me/password`    | POST      | Change password (requires current password)    |
 
 `/addresses`, `/locations`, `/restaurants`, `/branches`, `/categories`,
 `/products`, `/search`, `/cart`, `/orders`, `/payments`, `/promotions`,
@@ -259,7 +261,7 @@ delivered in Phases 2–9 per the implementation order below.
 
 ## Implementation Phases
 
-1. **Foundation** — scaffold, Docker, Prisma schema, auth, RBAC *(this phase)*
+1. **Foundation** — scaffold, Docker, Prisma schema, auth, RBAC _(this phase)_
 2. Uzbekistan location hierarchy, addresses, map abstraction, restaurants/branches
 3. Menus, products, images, search, filters
 4. Cart, server-side pricing, delivery zones, checkout

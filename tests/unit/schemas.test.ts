@@ -52,8 +52,6 @@ describe("registerSchema", () => {
 
 describe("loginSchema", () => {
   it("accepts a valid login payload", () => {
-    expect(() =>
-      loginSchema.parse({ phone: "+998901234567", password: "anything" }),
-    ).not.toThrow();
+    expect(() => loginSchema.parse({ phone: "+998901234567", password: "anything" })).not.toThrow();
   });
 });

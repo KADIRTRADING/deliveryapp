@@ -42,9 +42,7 @@ export async function PATCH(req: NextRequest) {
         locale: input.locale,
         avatarUrl: input.avatarUrl,
         // Changing email requires re-verification; clear any prior verification.
-        ...(input.email !== undefined
-          ? { email: input.email, emailVerifiedAt: null }
-          : {}),
+        ...(input.email !== undefined ? { email: input.email, emailVerifiedAt: null } : {}),
       },
       include: { roles: true },
     });

@@ -39,7 +39,10 @@ export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 export const verifyOtpSchema = z.object({
   phone: uzbekPhoneSchema,
   purpose: z.enum(["REGISTER", "LOGIN", "RESET_PASSWORD", "VERIFY_PHONE", "CHANGE_PHONE"]),
-  code: z.string().trim().regex(/^\d{4,8}$/, "Invalid verification code"),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{4,8}$/, "Invalid verification code"),
 });
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 

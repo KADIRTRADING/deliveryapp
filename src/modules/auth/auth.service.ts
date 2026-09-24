@@ -90,9 +90,7 @@ export async function loginUser(input: LoginInput, meta: RequestMeta) {
 
 // A precomputed valid-format scrypt hash of a random value, used purely to
 // equalize timing between "user not found" and "wrong password" branches.
-const DUMMY_HASH =
-  "scrypt$16384$8$1$00000000000000000000000000000000$" +
-  "00".repeat(64);
+const DUMMY_HASH = "scrypt$16384$8$1$00000000000000000000000000000000$" + "00".repeat(64);
 
 export async function requestPasswordReset(phone: string): Promise<string | null> {
   const user = await prisma.user.findUnique({ where: { phone } });

@@ -37,8 +37,7 @@ export function hasRole(session: AuthSession, ...roles: Role[]): boolean {
 }
 
 /** Convenience predicates used throughout the codebase for readability. */
-export const isAdmin = (session: AuthSession) =>
-  hasRole(session, "ADMIN", "SUPER_ADMIN");
+export const isAdmin = (session: AuthSession) => hasRole(session, "ADMIN", "SUPER_ADMIN");
 
 export const isSuperAdmin = (session: AuthSession) => hasRole(session, "SUPER_ADMIN");
 
