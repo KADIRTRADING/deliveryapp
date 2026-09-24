@@ -56,6 +56,38 @@ export async function requireDeliveryZoneAccess(
   return { branchId: zone.branchId, restaurantId };
 }
 
+export async function requireMenuCategoryAccess(
+  session: AuthSession,
+  menuCategoryId: string,
+  opts?: { roles?: RestaurantUserRole[] },
+): Promise<{ restaurantId: string }> {
+  const category = await prisma.menuCategory.findUnique({
+    where: { id: menuCategoryId },
+    select: { id: true, restaurantId: true },
+  });
+  if (!category) {
+    throw ApiError.notFound("Menu category not found");
+  }
+  await requireRestaurantAccess(session, category.restaurantId, { roles: opts?.roles });
+  return { restaurantId: category.restaurantId };
+}
+
+export async function requireProductAccess(
+  session: AuthSession,
+  productId: string,
+  opts?: { roles?: RestaurantUserRole[] },
+): Promise<{ restaurantId: string }> {
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, restaurantId: true },
+  });
+  if (!product) {
+    throw ApiError.notFound("Product not found");
+  }
+  await requireRestaurantAccess(session, product.restaurantId, { roles: opts?.roles });
+  return { restaurantId: product.restaurantId };
+}
+
 export async function requireBranchAccess(
   session: AuthSession,
   branchId: string,

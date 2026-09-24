@@ -1,21 +1,30 @@
 name: Generate Prisma Migration
 
-# Manually-triggered utility workflow. This sandbox environment cannot run
-# `prisma migrate dev` locally (no local Postgres, no package-registry
-# network access), so migration files are generated here — against a real
-# Postgres instance, on GitHub's infrastructure — and committed back to the
-# target branch. Run this whenever schema.prisma changes and a new migration
-# needs to be captured.
+# Utility workflow. This sandbox environment cannot run `prisma migrate dev`
+# locally (no local Postgres, no package-registry network access), so
+# migration files are generated here — against a real Postgres instance, on
+# GitHub's infrastructure — and committed back to the branch that triggered
+# the run.
 #
-# Usage: trigger via `gh api repos/{owner}/{repo}/actions/workflows/generate-migration.yml/dispatches -f ref=<branch> -f "inputs[migrationName]=<name>"`
+# NOTE: this intentionally does NOT use `workflow_dispatch`. GitHub only
+# recognizes workflow_dispatch-triggered workflows that exist on the
+# repository's default branch, and this repo's default-branch setting is not
+# changeable via the API in this environment (repo-settings PATCH calls are
+# blocked by the sandbox's outbound gateway with a 403). `push`/`pull_request`
+# triggers have no such restriction — the workflow file is read from the
+# commit being built — so instead this fires automatically whenever
+# prisma/schema.prisma changes on any branch. Reads the desired migration
+# name from a `MIGRATION_NAME` file at the repo root (defaults to "update" if
+# absent), so it can be renamed per change without editing this workflow.
 
 on:
-  workflow_dispatch:
-    inputs:
-      migrationName:
-        description: "Migration name (e.g. init, add_search_fields)"
-        required: true
-        type: string
+  push:
+    paths:
+      - "prisma/schema.prisma"
+      - ".github/workflows/generate-migration.yml"
+
+permissions:
+  contents: write
 
 jobs:
   generate:
@@ -49,8 +58,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Determine migration name
+        id: migration-name
+        run: |
+          if [ -f MIGRATION_NAME ]; then
+            NAME=$(cat MIGRATION_NAME | tr -d '[:space:]')
+          else
+            NAME="update"
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
       - name: Generate migration
-        run: npx prisma migrate dev --name "${{ inputs.migrationName }}" --skip-seed
+        run: npx prisma migrate dev --name "${{ steps.migration-name.outputs.name }}" --skip-seed
 
       - name: Commit and push migration
         run: |
@@ -60,6 +79,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No migration changes to commit."
           else
-            git commit -m "chore(prisma): generate migration '${{ inputs.migrationName }}'"
+            git commit -m "chore(prisma): generate migration '${{ steps.migration-name.outputs.name }}'"
             git push origin HEAD:"${{ github.ref_name }}"
           fi
