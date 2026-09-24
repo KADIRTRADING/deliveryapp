@@ -1,0 +1,46 @@
+{
+  "common": {
+    "appName": "DeliveryApp",
+    "loading": "Yuklanmoqda...",
+    "error": "Xatolik yuz berdi",
+    "retry": "Qayta urinish",
+    "cancel": "Bekor qilish",
+    "confirm": "Tasdiqlash",
+    "save": "Saqlash",
+    "back": "Orqaga"
+  },
+  "auth": {
+    "loginTitle": "Kirish",
+    "registerTitle": "Ro'yxatdan o'tish",
+    "phoneLabel": "Telefon raqami",
+    "phonePlaceholder": "+998 90 123 45 67",
+    "passwordLabel": "Parol",
+    "firstNameLabel": "Ism",
+    "lastNameLabel": "Familiya",
+    "loginButton": "Kirish",
+    "registerButton": "Ro'yxatdan o'tish",
+    "noAccount": "Hisobingiz yo'qmi?",
+    "haveAccount": "Hisobingiz bormi?",
+    "forgotPassword": "Parolni unutdingizmi?",
+    "invalidCredentials": "Telefon raqami yoki parol xato",
+    "logout": "Chiqish"
+  },
+  "home": {
+    "heroTitle": "Sevimli taomlaringizni buyurtma qiling",
+    "heroSubtitle": "O'zbekiston bo'ylab tezkor va ishonchli yetkazib berish",
+    "selectLocation": "Manzilni tanlang",
+    "nearby": "Yaqin atrofda",
+    "popular": "Ommabop",
+    "fastDelivery": "Tezkor yetkazib berish",
+    "discounts": "Chegirmalar",
+    "newRestaurants": "Yangi restoranlar",
+    "recommended": "Tavsiya etilgan"
+  },
+  "nav": {
+    "home": "Bosh sahifa",
+    "search": "Qidiruv",
+    "cart": "Savatcha",
+    "orders": "Buyurtmalar",
+    "profile": "Profil"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "common": {
+    "appName": "DeliveryApp",
+    "loading": "Загрузка...",
+    "error": "Произошла ошибка",
+    "retry": "Повторить",
+    "cancel": "Отмена",
+    "confirm": "Подтвердить",
+    "save": "Сохранить",
+    "back": "Назад"
+  },
+  "auth": {
+    "loginTitle": "Вход",
+    "registerTitle": "Регистрация",
+    "phoneLabel": "Номер телефона",
+    "phonePlaceholder": "+998 90 123 45 67",
+    "passwordLabel": "Пароль",
+    "firstNameLabel": "Имя",
+    "lastNameLabel": "Фамилия",
+    "loginButton": "Войти",
+    "registerButton": "Зарегистрироваться",
+    "noAccount": "Нет аккаунта?",
+    "haveAccount": "Уже есть аккаунт?",
+    "forgotPassword": "Забыли пароль?",
+    "invalidCredentials": "Неверный номер телефона или пароль",
+    "logout": "Выйти"
+  },
+  "home": {
+    "heroTitle": "Заказывайте любимую еду",
+    "heroSubtitle": "Быстрая и надёжная доставка по всему Узбекистану",
+    "selectLocation": "Выберите адрес",
+    "nearby": "Рядом с вами",
+    "popular": "Популярные",
+    "fastDelivery": "Быстрая доставка",
+    "discounts": "Скидки",
+    "newRestaurants": "Новые рестораны",
+    "recommended": "Рекомендуемые"
+  },
+  "nav": {
+    "home": "Главная",
+    "search": "Поиск",
+    "cart": "Корзина",
+    "orders": "Заказы",
+    "profile": "Профиль"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "common": {
+    "appName": "DeliveryApp",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "back": "Back"
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "registerTitle": "Create account",
+    "phoneLabel": "Phone number",
+    "phonePlaceholder": "+998 90 123 45 67",
+    "passwordLabel": "Password",
+    "firstNameLabel": "First name",
+    "lastNameLabel": "Last name",
+    "loginButton": "Sign in",
+    "registerButton": "Create account",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "forgotPassword": "Forgot password?",
+    "invalidCredentials": "Invalid phone number or password",
+    "logout": "Sign out"
+  },
+  "home": {
+    "heroTitle": "Order your favorite food",
+    "heroSubtitle": "Fast and reliable delivery across Uzbekistan",
+    "selectLocation": "Choose delivery address",
+    "nearby": "Nearby",
+    "popular": "Popular",
+    "fastDelivery": "Fast delivery",
+    "discounts": "Discounts",
+    "newRestaurants": "New restaurants",
+    "recommended": "Recommended"
+  },
+  "nav": {
+    "home": "Home",
+    "search": "Search",
+    "cart": "Cart",
+    "orders": "Orders",
+    "profile": "Profile"
+  }
+}
