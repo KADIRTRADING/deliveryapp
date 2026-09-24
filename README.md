@@ -6,11 +6,14 @@ hierarchy, server-authoritative pricing, and provider abstractions for
 payments, maps, object storage, and SMS so real vendor integrations can be
 dropped in without touching business logic.
 
-> **Status:** Phase 1 of 10 (see [Implementation Phases](#implementation-phases)).
-> This phase delivers the foundation: project scaffold, Docker Compose stack,
-> full domain schema (Prisma), authentication, RBAC, and the `/auth` and
-> `/users` API surface. Restaurant discovery, cart/checkout, orders, payments,
-> courier workflow, and the admin panel are built out in subsequent phases.
+> **Status:** Phase 2 of 10 (see [Implementation Phases](#implementation-phases)).
+> Delivered so far: project scaffold, Docker Compose stack, full domain
+> schema (Prisma), authentication, RBAC, the `/auth`/`/users` API surface,
+> the Uzbekistan region/city/district location hierarchy, address CRUD, a
+> MapProvider abstraction (geocoding/reverse-geocoding), and restaurant/
+> branch/delivery-zone management with real geofenced discovery. Menus,
+> cart/checkout, orders, payments, courier workflow, and the admin panel are
+> built out in subsequent phases.
 
 ## Table of Contents
 
@@ -182,10 +185,16 @@ npm run test:watch  # watch mode
 
 Phase 1 tests cover phone/password validation schemas, password hashing
 (scrypt correctness, salting, malformed-hash handling), and core crypto
-helpers. Each subsequent phase adds tests for its own domain (cart pricing,
-delivery zone geofencing, promo validation, order transitions, payment
-webhook verification, restaurant authorization) per the project's testing
-requirements.
+helpers. Phase 2 adds geospatial utilities (Haversine distance, radius and
+polygon membership) and branch open-hours evaluation. Each subsequent phase
+adds tests for its own domain (cart pricing, promo validation, order
+transitions, payment webhook verification, restaurant authorization) per the
+project's testing requirements.
+
+Note: modules marked `import "server-only"` are aliased to a no-op during
+Vitest runs (see `vitest.config.ts` / `tests/mocks/server-only.ts`) — that
+guard only has meaning inside Next.js's RSC bundler and would otherwise throw
+when a service module is imported directly in a unit test.
 
 ## Security Model
 
@@ -223,11 +232,34 @@ requirements.
 | `SmsProvider`     | `src/modules/notifications/sms-provider.ts` | `ConsoleSmsProvider` (logs OTP to server console) | `EskizSmsProvider` (Eskiz.uz gateway)                   |
 | `PaymentProvider` | _(Phase 7)_                                 | Mock simulator, no real charges                   | Payme / Click adapters                                  |
 | `StorageProvider` | _(Phase 3)_                                 | In-memory mock                                    | S3-compatible (MinIO locally, AWS S3/DO Spaces in prod) |
-| `MapProvider`     | _(Phase 2)_                                 | Functional stub, no external calls                | Mapbox (server-side token only)                         |
+| `MapProvider`     | `src/modules/locations/map-provider.ts`     | `MockMapProvider` (deterministic stub results)    | `MapboxMapProvider` (server-side secret token only)     |
 
 Each adapter is selected purely by environment variable
 (`SMS_PROVIDER`, `PAYMENT_DEFAULT_PROVIDER`, `STORAGE_PROVIDER`, `MAP_PROVIDER`)
 so switching providers never requires a code change in calling modules.
+
+### Maps
+
+The client never talks to Mapbox (or any map vendor) directly, and never
+holds an API key: `/api/locations/geocode` and `/api/locations/reverse-geocode`
+proxy to the server-side `MapProvider`. To enable real geocoding:
+
+1. Create a Mapbox account and generate a **secret** token (`sk.*`), scoped
+   to the Geocoding API only.
+2. Set `MAP_PROVIDER=mapbox` and `MAPBOX_SERVER_TOKEN=sk.xxxxx` in `.env`.
+3. Leave unset (or `MAP_PROVIDER=mock`) for local development — the mock
+   adapter returns deterministic, clearly-labeled stub coordinates centered
+   on Tashkent so the address-search flow is fully exercisable without any
+   external account.
+
+If a future interactive map UI needs a client-side token, it must be a
+short-lived, URL-restricted **public** token minted by a dedicated endpoint
+— never the raw `MAPBOX_SERVER_TOKEN` read directly by client code.
+
+Delivery-zone membership (radius and polygon) and all distances used in
+pricing or restaurant discovery are computed server-side from raw
+coordinates via `src/lib/geo.ts` (Haversine distance, ray-casting
+point-in-polygon) — never accepted as a client-supplied value.
 
 ## Internationalization
 
@@ -254,15 +286,35 @@ Implemented in Phase 1 (all under `/api`):
 | `/api/users/me`             | GET/PATCH | View/edit the authenticated user's own profile |
 | `/api/users/me/password`    | POST      | Change password (requires current password)    |
 
-`/addresses`, `/locations`, `/restaurants`, `/branches`, `/categories`,
+Added in Phase 2:
+
+| Route                              | Method           | Purpose                                                 |
+| ---------------------------------- | ---------------- | ------------------------------------------------------- |
+| `/api/locations/regions`           | GET              | List all Uzbekistan regions                             |
+| `/api/locations/cities`            | GET              | List cities, optionally filtered by region              |
+| `/api/locations/districts`         | GET              | List districts within a city                            |
+| `/api/locations/geocode`           | GET              | Forward geocode a free-text address query               |
+| `/api/locations/reverse-geocode`   | GET              | Reverse geocode coordinates to a human-readable address |
+| `/api/addresses`                   | GET/POST         | List / save the authenticated user's delivery addresses |
+| `/api/addresses/:id`               | GET/PATCH/DELETE | View, edit, or soft-delete a saved address              |
+| `/api/restaurants`                 | GET/POST         | Discover serviceable restaurants / create a restaurant  |
+| `/api/restaurants/slug/:slug`      | GET              | Public restaurant detail lookup                         |
+| `/api/restaurants/:id`             | GET/PATCH        | Management fetch / edit a restaurant's profile          |
+| `/api/restaurants/:id/status`      | PATCH            | Admin-only restaurant approval/suspension/archiving     |
+| `/api/restaurants/:id/branches`    | GET/POST         | List / add branches for a restaurant                    |
+| `/api/branches/:id`                | PATCH/DELETE     | Edit or deactivate a branch                             |
+| `/api/branches/:id/delivery-zones` | GET/POST         | List / define delivery zones for a branch               |
+| `/api/delivery-zones/:id`          | PATCH/DELETE     | Edit or remove a delivery zone                          |
+| `/api/categories`                  | GET/POST         | List restaurant categories / admin-only create          |
+
 `/products`, `/search`, `/cart`, `/orders`, `/payments`, `/promotions`,
 `/reviews`, `/favorites`, `/notifications`, `/couriers`, and `/admin` are
-delivered in Phases 2–9 per the implementation order below.
+delivered in Phases 3–9 per the implementation order below.
 
 ## Implementation Phases
 
-1. **Foundation** — scaffold, Docker, Prisma schema, auth, RBAC _(this phase)_
-2. Uzbekistan location hierarchy, addresses, map abstraction, restaurants/branches
+1. **Foundation** — scaffold, Docker, Prisma schema, auth, RBAC ✅
+2. **Uzbekistan location hierarchy, addresses, map abstraction, restaurants/branches** ✅ _(this phase)_
 3. Menus, products, images, search, filters
 4. Cart, server-side pricing, delivery zones, checkout
 5. Orders, restaurant dashboard, realtime status

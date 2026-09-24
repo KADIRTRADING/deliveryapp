@@ -1,7 +1,10 @@
 import "server-only";
 import type { Role } from "@prisma/client";
 import { ApiError } from "@/lib/api-error";
-import { getCurrentSession, type AuthSession } from "@/modules/auth/session";
+import { getCurrentSession } from "@/modules/auth/session";
+import type { AuthSession } from "@/modules/auth/session";
+
+export type { AuthSession };
 
 /**
  * RBAC enforcement helpers.
