@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  verify:
+    name: Install, lint, typecheck, validate, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: deliveryapp
+          POSTGRES_PASSWORD: deliveryapp
+          POSTGRES_DB: deliveryapp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U deliveryapp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://deliveryapp:deliveryapp@localhost:5432/deliveryapp
+      REDIS_URL: redis://localhost:6379
+      APP_URL: http://localhost:3000
+      SESSION_COOKIE_NAME: dapp_session
+      CSRF_COOKIE_NAME: dapp_csrf
+      STORAGE_PROVIDER: mock
+      MAP_PROVIDER: mock
+      PAYMENT_DEFAULT_PROVIDER: mock
+      SMS_PROVIDER: console
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # No package-lock.json is committed yet (it is generated on first
+      # `npm install` — see README "Getting Started"), so we use `npm install`
+      # rather than `npm ci` here. Once a lock file exists, switch this back
+      # to `npm ci` for reproducible, faster installs.
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Validate Prisma schema
+        run: npm run prisma:validate
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run database migrations
+        run: npm run prisma:migrate:deploy
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
