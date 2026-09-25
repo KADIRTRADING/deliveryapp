@@ -1,7 +1,7 @@
 version: "3.9"
 
 # Local development stack: the Next.js app, PostgreSQL, Redis (cache / rate
-# limiting / future queues), and MinIO (S3-compatible object storage) so the
+# limiting / future queues), and RustFS (S3-compatible object storage) so the
 # StorageProvider abstraction has a real backend to talk to without any cloud
 # credentials. See README.md "Docker" section for usage instructions.
 
@@ -18,14 +18,18 @@ services:
     environment:
       DATABASE_URL: postgresql://deliveryapp:deliveryapp@postgres:5432/deliveryapp
       REDIS_URL: redis://redis:6379
-      S3_ENDPOINT: http://minio:9000
+      S3_ENDPOINT: http://storage:9000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      # Not gated on storage's healthcheck: the app can start and serve
+      # most routes (including GET /api/health) before object storage is
+      # ready — only upload-related endpoints need it, and they'll simply
+      # fail with a clear error if called too early.
+      storage:
+        condition: service_started
     volumes:
       - .:/app
       - app_node_modules:/app/node_modules
@@ -61,20 +65,31 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
+  # S3-compatible object storage for local development, backing the
+  # StorageProvider abstraction (see src/modules/storage/storage-provider.ts).
+  # Uses RustFS rather than MinIO: MinIO stopped publishing pre-built Docker
+  # images for its community edition in October 2025 and its Docker Hub
+  # repository was removed entirely by September 2026, so `minio/minio` can
+  # no longer be pulled. RustFS is an actively-maintained, S3-API-compatible,
+  # open-source drop-in with the same API/console port layout.
+  storage:
+    image: rustfs/rustfs:latest
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: /data
     environment:
-      MINIO_ROOT_USER: deliveryapp
-      MINIO_ROOT_PASSWORD: deliveryapp123
+      RUSTFS_ACCESS_KEY: deliveryapp
+      RUSTFS_SECRET_KEY: deliveryapp123
+      RUSTFS_CONSOLE_ENABLE: "true"
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      - storage_data:/data
+    # Best-effort: not depended on by `app` (see its `depends_on` below),
+    # so an unavailable healthcheck tool inside this image degrades to
+    # "reported unhealthy in `docker compose ps`" rather than blocking startup.
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health/ready || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -82,5 +97,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  minio_data:
+  storage_data:
   app_node_modules:

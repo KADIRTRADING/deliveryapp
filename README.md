@@ -71,17 +71,17 @@ still being a real, working implementation in development.
 
 ## Tech Stack
 
-| Concern               | Choice                        | Why                                                                                  |
-| --------------------- | ----------------------------- | ------------------------------------------------------------------------------------ |
-| Language              | TypeScript (strict mode)      | Type safety across the full stack                                                    |
-| Framework             | Next.js 15 (App Router)       | API routes + SSR from one codebase; React Native can consume the same REST API later |
-| ORM                   | Prisma 6 + PostgreSQL         | Strong typing, migrations, transactions                                              |
-| Cache/Sessions/Queues | Redis (ioredis)               | Rate limiting now; queues/pub-sub for realtime in later phases                       |
-| Object storage        | S3-compatible (MinIO locally) | `StorageProvider` interface, swappable to AWS S3/DO Spaces in prod                   |
-| Validation            | Zod                           | Single source of truth for input validation, shared error shape                      |
-| Styling               | Tailwind CSS                  | Utility-first, fast iteration, small CSS payload                                     |
-| i18n                  | next-intl                     | uz (default) / ru / en, JSON message catalogs, no hard-coded UI strings              |
-| Testing               | Vitest                        | Fast, native ESM/TS support                                                          |
+| Concern               | Choice                         | Why                                                                                  |
+| --------------------- | ------------------------------ | ------------------------------------------------------------------------------------ |
+| Language              | TypeScript (strict mode)       | Type safety across the full stack                                                    |
+| Framework             | Next.js 15 (App Router)        | API routes + SSR from one codebase; React Native can consume the same REST API later |
+| ORM                   | Prisma 6 + PostgreSQL          | Strong typing, migrations, transactions                                              |
+| Cache/Sessions/Queues | Redis (ioredis)                | Rate limiting now; queues/pub-sub for realtime in later phases                       |
+| Object storage        | S3-compatible (RustFS locally) | `StorageProvider` interface, swappable to AWS S3/DO Spaces in prod                   |
+| Validation            | Zod                            | Single source of truth for input validation, shared error shape                      |
+| Styling               | Tailwind CSS                   | Utility-first, fast iteration, small CSS payload                                     |
+| i18n                  | next-intl                      | uz (default) / ru / en, JSON message catalogs, no hard-coded UI strings              |
+| Testing               | Vitest                         | Fast, native ESM/TS support                                                          |
 
 We pinned **Next.js 15 / Prisma 6** rather than the newest Next 16 / Prisma 7
 majors: both introduced significant breaking changes very recently (Next 16
@@ -95,7 +95,7 @@ incompatibilities (see Troubleshooting).
 ## Prerequisites
 
 - Node.js 20+
-- Docker + Docker Compose (recommended for local Postgres/Redis/MinIO)
+- Docker + Docker Compose (recommended for local Postgres/Redis/RustFS)
 - npm 10+
 
 ## Getting Started
@@ -108,8 +108,8 @@ cp .env.example .env
 # Install dependencies (generates package-lock.json on first run)
 npm install
 
-# Start Postgres, Redis, and MinIO
-docker compose up -d postgres redis minio
+# Start Postgres, Redis, and RustFS (S3-compatible storage)
+docker compose up -d postgres redis storage
 
 # Apply the database schema
 npm run prisma:migrate
@@ -175,7 +175,7 @@ npm run prisma:studio          # visual DB browser
 docker compose up --build
 ```
 
-This starts the app, PostgreSQL, Redis, and MinIO together. The `app`
+This starts the app, PostgreSQL, Redis, and RustFS together. The `app`
 service runs migrations automatically before starting the dev server (see
 `docker-compose.yml`). The production `Dockerfile` builds a minimal
 standalone Next.js server image (multi-stage; final image contains no
