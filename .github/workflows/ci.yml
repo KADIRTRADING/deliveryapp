@@ -88,6 +88,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Created up front (not just before `docker compose up`) so the
+      # teardown step below always has a valid .env to read, even if an
+      # earlier step in this job fails.
+      - name: Create .env for compose smoke test
+        run: cp .env.example .env
+
       # Real verification that the production Docker image actually builds
       # end-to-end (deps install, prisma generate, next build, standalone
       # copy) — this sandbox's development environment has no outbound
@@ -98,9 +104,6 @@ jobs:
 
       - name: Build development image
         run: docker build --target development -t deliveryapp:ci-check-dev .
-
-      - name: Create .env for compose smoke test
-        run: cp .env.example .env
 
       - name: Start full stack via docker compose
         run: docker compose up -d --build
@@ -122,4 +125,4 @@ jobs:
 
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose down -v || true

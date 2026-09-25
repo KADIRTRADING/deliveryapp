@@ -3,7 +3,13 @@
 # ---- base -------------------------------------------------------------------
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache libc6-compat openssl
+# Retry apk's package fetch a few times — Alpine's CDN occasionally returns a
+# transient TLS/connection error on CI runners; a bare `apk add` has no
+# retry logic of its own and fails the whole build on the first flake.
+RUN for i in 1 2 3 4 5; do \
+      apk add --no-cache libc6-compat openssl && break; \
+      echo "apk add failed (attempt $i/5), retrying in 5s..." && sleep 5; \
+    done
 
 # ---- deps --------------------------------------------------------------------
 # NOTE: no package-lock.json is committed yet (see README "Getting Started"),
