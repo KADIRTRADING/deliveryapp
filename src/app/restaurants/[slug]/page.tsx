@@ -115,41 +115,44 @@ export default function RestaurantPage() {
               {pickLocalized(category, locale)}
             </h2>
             <div className="flex flex-col gap-3">
-              {category.products.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => user && setSelectedProduct(product)}
-                  disabled={!user || !product.isAvailable}
-                  className="flex items-center justify-between rounded-xl2 border border-ink-100 bg-white p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium text-ink-900">
-                      {pickLocalized(product, locale)}
-                    </span>
-                    {pickLocalizedDescription(product, locale) && (
-                      <span className="text-sm text-ink-400">
-                        {pickLocalizedDescription(product, locale)}
+              {category.products.map((product) => {
+                const coverImage = product.images[0];
+                return (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => user && setSelectedProduct(product)}
+                    disabled={!user || !product.isAvailable}
+                    className="flex items-center justify-between rounded-xl2 border border-ink-100 bg-white p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium text-ink-900">
+                        {pickLocalized(product, locale)}
                       </span>
-                    )}
-                    <span className="font-semibold text-brand-600">
-                      {formatUzs(product.discountedPrice ?? product.basePrice, locale)}
-                      {product.discountedPrice && (
-                        <span className="ml-2 text-xs text-ink-300 line-through">
-                          {formatUzs(product.basePrice, locale)}
+                      {pickLocalizedDescription(product, locale) && (
+                        <span className="text-sm text-ink-400">
+                          {pickLocalizedDescription(product, locale)}
                         </span>
                       )}
-                    </span>
-                  </div>
-                  {product.images[0] && (
-                    <img
-                      src={product.images[0].url}
-                      alt={pickLocalized(product, locale)}
-                      className="h-16 w-16 rounded-xl2 object-cover"
-                    />
-                  )}
-                </button>
-              ))}
+                      <span className="font-semibold text-brand-600">
+                        {formatUzs(product.discountedPrice ?? product.basePrice, locale)}
+                        {product.discountedPrice && (
+                          <span className="ml-2 text-xs text-ink-300 line-through">
+                            {formatUzs(product.basePrice, locale)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {coverImage && (
+                      <img
+                        src={coverImage.url}
+                        alt={pickLocalized(product, locale)}
+                        className="h-16 w-16 rounded-xl2 object-cover"
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </section>
         ))}
