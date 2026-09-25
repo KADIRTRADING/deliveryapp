@@ -11,6 +11,7 @@ import {
 } from "@/modules/orders/status-machine";
 import { publishOrderStatusEvent } from "@/modules/orders/realtime";
 import { notifyOrderStatusChange } from "@/modules/notifications/notifications.service";
+import { offerNearestCourier } from "@/modules/couriers/couriers.service";
 import type { OrderStatus, Role } from "@prisma/client";
 
 const orderInclude = {
@@ -182,6 +183,20 @@ export async function advanceOrderStatus(
     createdAt: new Date().toISOString(),
   });
   await notifyOrderStatusChange(order.userId, orderId, order.orderNumber, targetStatus);
+
+  // Once the restaurant marks an order ready for pickup, immediately try to
+  // offer it to the nearest online courier — best-effort: if no courier is
+  // currently online, the order simply stays READY_FOR_PICKUP until a
+  // restaurant/admin retriggers offering or a courier comes online (Phase 8
+  // does not yet implement an automatic retry/broadcast scheduler).
+  if (targetStatus === "READY_FOR_PICKUP") {
+    try {
+      await offerNearestCourier(orderId, order.branchId);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[orders] failed to offer courier for order", orderId, err);
+    }
+  }
 }
 
 /**
