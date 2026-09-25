@@ -5,6 +5,7 @@ import { haversineDistanceMeters, isPointInPolygon, isWithinRadius } from "@/lib
 import { priceCart } from "@/modules/cart/cart.service";
 import { calculateDeliveryFee, calculateOrderTotals } from "@/modules/pricing/pricing";
 import { generateOrderNumber } from "@/modules/orders/order-number";
+import { validatePromoCode, redeemPromoCode } from "@/modules/promotions/promo-code.service";
 import type { CheckoutInput } from "@/modules/orders/schemas";
 import type { Prisma } from "@prisma/client";
 
@@ -137,17 +138,30 @@ export async function checkout(userId: string, restaurantId: string, input: Chec
     );
   }
 
-  const deliveryFeeAmount = calculateDeliveryFee({
+  let deliveryFeeAmount = calculateDeliveryFee({
     baseFee: servicing.baseFee,
     perKmFee: servicing.perKmFee,
     distanceMeters: servicing.distanceMeters,
   });
 
-  // Promo code discounting is implemented fully in Phase 7; for now any
-  // supplied code is accepted as a no-op discount of 0 so the checkout
-  // contract (accepting a promoCode field) is already stable for clients
-  // integrating against this API ahead of that phase.
-  const discountAmount = 0;
+  let discountAmount = 0;
+  let appliedPromoCodeId: string | null = null;
+
+  if (input.promoCode) {
+    const promoCode = await prisma.promoCode.findUnique({ where: { code: input.promoCode } });
+    const validation = await validatePromoCode(
+      input.promoCode,
+      userId,
+      restaurantId,
+      priced.subtotalAmount,
+    );
+    appliedPromoCodeId = validation.promoCodeId;
+    if (promoCode?.discountType === "FREE_DELIVERY") {
+      deliveryFeeAmount = 0;
+    } else {
+      discountAmount = validation.discountAmount;
+    }
+  }
 
   const totals = calculateOrderTotals({
     lines: priced.lines,
@@ -192,6 +206,7 @@ export async function checkout(userId: string, restaurantId: string, input: Chec
         branchId: servicing.branchId,
         deliveryZoneId: servicing.deliveryZoneId,
         addressId: address.id,
+        promoCodeId: appliedPromoCodeId,
         addressSnapshot,
         recipientName: input.recipientName ?? address.recipientName,
         recipientPhone: input.recipientPhone ?? address.recipientPhone,
@@ -252,6 +267,10 @@ export async function checkout(userId: string, restaurantId: string, input: Chec
         reason: "Order placed",
       },
     });
+
+    if (appliedPromoCodeId) {
+      await redeemPromoCode(tx, appliedPromoCodeId, userId, createdOrder.id, totals.discountAmount);
+    }
 
     // The cart is fully consumed on successful checkout.
     await tx.cart.delete({ where: { id: cart.id } });

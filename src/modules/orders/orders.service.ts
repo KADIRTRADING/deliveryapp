@@ -10,6 +10,7 @@ import {
   CUSTOMER_CANCELLABLE_STATUSES,
 } from "@/modules/orders/status-machine";
 import { publishOrderStatusEvent } from "@/modules/orders/realtime";
+import { notifyOrderStatusChange } from "@/modules/notifications/notifications.service";
 import type { OrderStatus, Role } from "@prisma/client";
 
 const orderInclude = {
@@ -180,6 +181,64 @@ export async function advanceOrderStatus(
     status: targetStatus,
     createdAt: new Date().toISOString(),
   });
+  await notifyOrderStatusChange(order.userId, orderId, order.orderNumber, targetStatus);
+}
+
+/**
+ * System-driven status advancement — used when the actor is not a human
+ * session but a verified external event (a payment webhook; see
+ * payments.service.ts). Bypasses role/branch-access checks entirely
+ * (there is no session to check them against) but still enforces the
+ * state machine's transition legality via assertValidTransition, and
+ * still writes an immutable OrderStatusHistory row (with a null
+ * actorUserId/actorRole to make it visually distinct from a human-driven
+ * transition in the audit trail) and publishes the realtime event.
+ *
+ * This function must NEVER be reachable from a route handler directly —
+ * only from server-side code that has already independently verified the
+ * event's authenticity (e.g. a payment provider's webhook signature).
+ */
+export async function advanceOrderStatusSystem(
+  orderId: string,
+  targetStatus: OrderStatus,
+  opts?: AdvanceOptions,
+): Promise<void> {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) {
+    throw ApiError.notFound("Order not found");
+  }
+
+  assertValidTransition(order.status, targetStatus);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: targetStatus,
+        ...(targetStatus === "PAID" ? {} : {}),
+        ...(targetStatus === "CANCELLED"
+          ? { cancelledAt: new Date(), cancelReason: opts?.reason ?? null }
+          : {}),
+      },
+    });
+
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId,
+        status: targetStatus,
+        actorUserId: null,
+        actorRole: null,
+        reason: opts?.reason ?? "Automated system transition",
+      },
+    });
+  });
+
+  await publishOrderStatusEvent({
+    orderId,
+    status: targetStatus,
+    createdAt: new Date().toISOString(),
+  });
+  await notifyOrderStatusChange(order.userId, orderId, order.orderNumber, targetStatus);
 }
 
 /** Pick the role under which `session` is acting for this transition, for audit-trail purposes. */
@@ -235,4 +294,5 @@ export async function cancelOrderAsCustomer(
     status: "CANCELLED",
     createdAt: new Date().toISOString(),
   });
+  await notifyOrderStatusChange(order.userId, orderId, order.orderNumber, "CANCELLED");
 }
