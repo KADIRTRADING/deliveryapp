@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/modules/auth/rbac";
 import { initiateOrderPayment } from "@/modules/payments/payments.service";
-import { handleApiError } from "@/lib/api-error";
+import { handleApiError, ApiError } from "@/lib/api-error";
+import { RateLimits } from "@/lib/rate-limit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -16,6 +17,12 @@ interface RouteParams {
 export async function POST(_req: NextRequest, { params }: RouteParams) {
   try {
     const session = await requireAuth();
+
+    const limit = await RateLimits.paymentInitiatePerUser(session.user.id);
+    if (!limit.allowed) {
+      throw ApiError.tooManyRequests("Too many payment attempts. Try again shortly.");
+    }
+
     const { id } = await params;
     const result = await initiateOrderPayment(session.user.id, id);
     return NextResponse.json({ payment: result }, { status: 200 });
