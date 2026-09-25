@@ -20,7 +20,10 @@ describe("order status machine", () => {
       "DELIVERED",
     ] as const;
     for (let i = 0; i < path.length - 1; i++) {
-      expect(isValidTransition(path[i], path[i + 1])).toBe(true);
+      const from = path[i];
+      const to = path[i + 1];
+      if (!from || !to) throw new Error("test setup error");
+      expect(isValidTransition(from, to)).toBe(true);
     }
   });
 
