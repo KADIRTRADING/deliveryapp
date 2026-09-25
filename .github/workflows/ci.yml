@@ -81,3 +81,45 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  docker:
+    name: Verify Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Real verification that the production Docker image actually builds
+      # end-to-end (deps install, prisma generate, next build, standalone
+      # copy) — this sandbox's development environment has no outbound
+      # access to any container registry, so this is the only place this
+      # Dockerfile is ever actually built and checked.
+      - name: Build production image
+        run: docker build --target production -t deliveryapp:ci-check .
+
+      - name: Build development image
+        run: docker build --target development -t deliveryapp:ci-check-dev .
+
+      - name: Create .env for compose smoke test
+        run: cp .env.example .env
+
+      - name: Start full stack via docker compose
+        run: docker compose up -d --build
+
+      - name: Wait for the app to respond healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://localhost:3000/api/health; then
+              echo ""
+              echo "App is healthy."
+              exit 0
+            fi
+            echo "Attempt $i: not ready yet, retrying in 5s..."
+            sleep 5
+          done
+          echo "App did not become healthy in time."
+          docker compose logs
+          exit 1
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

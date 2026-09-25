@@ -8,6 +8,35 @@ export interface PromoCodeValidationResult {
   discountAmount: number;
 }
 
+export interface DiscountCalculationInput {
+  discountType: "PERCENTAGE" | "FIXED" | "FREE_DELIVERY";
+  discountValue: number;
+  maxDiscountAmount: number | null;
+  subtotalAmount: number;
+}
+
+/**
+ * Pure discount-amount calculation, extracted from validatePromoCode so it
+ * is unit-testable without a database (mirrors the pricing.ts pattern
+ * elsewhere in this codebase: pure math lives in its own function, DB
+ * lookups/validation wrap around it). FREE_DELIVERY always returns 0 here
+ * — the caller (checkout.service.ts) applies free delivery to the delivery
+ * fee line separately, never by folding it into this subtotal discount.
+ */
+export function calculatePromoDiscount(input: DiscountCalculationInput): number {
+  let discountAmount = 0;
+  if (input.discountType === "PERCENTAGE") {
+    discountAmount = Math.round((input.subtotalAmount * input.discountValue) / 100);
+  } else if (input.discountType === "FIXED") {
+    discountAmount = input.discountValue;
+  }
+
+  if (input.maxDiscountAmount !== null) {
+    discountAmount = Math.min(discountAmount, input.maxDiscountAmount);
+  }
+  return Math.min(discountAmount, input.subtotalAmount);
+}
+
 /**
  * Validate a promo code against a specific order-in-progress and compute
  * the real discount amount server-side — per "Validate server-side" (the
@@ -64,19 +93,12 @@ export async function validatePromoCode(
     throw ApiError.badRequest("You have already used this promo code the maximum number of times.");
   }
 
-  let discountAmount = 0;
-  if (promoCode.discountType === "PERCENTAGE") {
-    discountAmount = Math.round((subtotalAmount * promoCode.discountValue) / 100);
-  } else if (promoCode.discountType === "FIXED") {
-    discountAmount = promoCode.discountValue;
-  }
-  // FREE_DELIVERY: discountAmount on the subtotal stays 0; the caller
-  // applies free delivery to the delivery fee line separately.
-
-  if (promoCode.maxDiscountAmount !== null) {
-    discountAmount = Math.min(discountAmount, promoCode.maxDiscountAmount);
-  }
-  discountAmount = Math.min(discountAmount, subtotalAmount);
+  const discountAmount = calculatePromoDiscount({
+    discountType: promoCode.discountType,
+    discountValue: promoCode.discountValue,
+    maxDiscountAmount: promoCode.maxDiscountAmount,
+    subtotalAmount,
+  });
 
   return { promoCodeId: promoCode.id, discountAmount };
 }

@@ -6,16 +6,19 @@ hierarchy, server-authoritative pricing, and provider abstractions for
 payments, maps, object storage, and SMS so real vendor integrations can be
 dropped in without touching business logic.
 
-> **Status:** Phase 9 of 10 (see [Implementation Phases](#implementation-phases)).
-> The full platform is functionally complete: authentication/RBAC, the
-> Uzbekistan location hierarchy, restaurant/branch/delivery-zone management
-> with real geofenced discovery, menus/products/search, cart/checkout with
-> server-authoritative pricing, the order lifecycle state machine with
-> realtime status and a restaurant dashboard, the admin panel, payments
-> (Payme/Click adapters with real signature verification) and promotions,
-> reviews/favorites/notifications, courier delivery workflow, and platform/
-> restaurant analytics. Phase 10 remains: broader automated test coverage,
-> final Docker verification, and deployment documentation.
+> **Status:** Phase 10 of 10 — feature-complete (see
+> [Implementation Phases](#implementation-phases)). The platform covers
+> authentication/RBAC, the Uzbekistan location hierarchy, restaurant/branch/
+> delivery-zone management with real geofenced discovery, menus/products/
+> search, cart/checkout with server-authoritative pricing, the order
+> lifecycle state machine with realtime status and a restaurant dashboard,
+> the admin panel, payments (Payme/Click adapters with real signature
+> verification) and promotions, reviews/favorites/notifications, courier
+> delivery workflow, and platform/restaurant analytics. Every phase's CI run
+> (install → lint → format → `prisma validate` → typecheck → `prisma migrate
+deploy` → test → production build → Docker build/compose smoke test) is
+> green on GitHub Actions — see [Verification](#verification) for exactly
+> what that does and does not prove.
 
 ## Table of Contents
 
@@ -185,13 +188,26 @@ npm run test        # run once
 npm run test:watch  # watch mode
 ```
 
-Phase 1 tests cover phone/password validation schemas, password hashing
-(scrypt correctness, salting, malformed-hash handling), and core crypto
-helpers. Phase 2 adds geospatial utilities (Haversine distance, radius and
-polygon membership) and branch open-hours evaluation. Each subsequent phase
-adds tests for its own domain (cart pricing, promo validation, order
-transitions, payment webhook verification, restaurant authorization) per the
-project's testing requirements.
+Current coverage spans every phase's core business logic:
+
+- **Auth:** phone/password validation schemas, scrypt password hashing
+  (correctness, salting, malformed-hash handling), crypto helpers
+- **Locations:** geospatial utilities (Haversine distance, radius and
+  polygon membership), branch open-hours evaluation
+- **Search:** Uzbek/Russian/English text normalization
+- **Pricing:** line pricing (base/discounted price, variant/modifier
+  deltas), distance-based delivery fee, full order-total aggregation
+  (discount capping, commission calculated on the correct base)
+- **Orders:** the full status-transition state machine (legal/illegal
+  transitions, role-based transition permissions, cancellation windows)
+- **Payments:** real signature verification for both Payme (Basic-Auth/
+  JSON-RPC) and Click (MD5 `sign_string`, recomputed against the
+  documented field concatenation) — valid signatures, tampered
+  signatures, and wrong secret keys are all exercised
+- **Promotions:** promo code discount calculation (percentage/fixed,
+  `maxDiscountAmount` capping, capping at the order subtotal)
+- **Couriers:** navigation deep-link generation
+- **Analytics:** date-range query validation
 
 Note: modules marked `import "server-only"` are aliased to a no-op during
 Vitest runs (see `vitest.config.ts` / `tests/mocks/server-only.ts`) — that
@@ -324,22 +340,68 @@ Added in Phase 2:
 | `/api/delivery-zones/:id`          | PATCH/DELETE     | Edit or remove a delivery zone                          |
 | `/api/categories`                  | GET/POST         | List restaurant categories / admin-only create          |
 
-`/products`, `/search`, `/cart`, `/orders`, `/payments`, `/promotions`,
-`/reviews`, `/favorites`, `/notifications`, `/couriers`, and `/admin` are
-delivered in Phases 3–9 per the implementation order below.
+Added in Phases 3–9 (grouped by area; see each module's source under
+`src/modules/*` and `src/app/api/**` for the full endpoint-by-endpoint
+detail — the list below is intentionally a summary, not exhaustive):
+
+| Area                      | Key routes                                                                                                                                                                           | Purpose                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Menus & search (3)        | `/api/restaurants/:id/menu-categories`, `/api/restaurants/:id/products`, `/api/products/:id`, `/api/products/:id/images`, `/api/search`, `/api/storage/presign`                      | Menu/product CRUD with variants & modifiers, presigned image uploads, global search |
+| Cart & checkout (4)       | `/api/cart/:restaurantId`, `/api/cart/:restaurantId/items/:itemId`, `/api/checkout/:restaurantId`, `/api/orders`                                                                     | Server-priced cart, geofenced checkout, order creation                              |
+| Order lifecycle (5)       | `/api/orders/:id`, `/api/orders/:id/status`, `/api/orders/:id/cancel`, `/api/orders/:id/stream`, `/api/branches/:id/orders`                                                          | Status transitions, live SSE updates, restaurant dashboard                          |
+| Admin (6)                 | `/api/admin/users`, `/api/admin/couriers`, `/api/admin/locations/*`, `/api/admin/orders`, `/api/admin/restaurants/:id/commission`, `/api/admin/audit-logs`, `/api/support/tickets`   | Platform-wide user/courier/location/order management, audit trail, support          |
+| Payments & promotions (7) | `/api/payments/orders/:id/initiate`, `/api/payments/webhooks/:provider`, `/api/admin/promo-codes`, `/api/admin/promotions`, `/api/reviews`, `/api/favorites/*`, `/api/notifications` | Payment initiation/webhooks, promo codes, reviews, favorites, notifications         |
+| Couriers (8)              | `/api/couriers/me/online`, `/api/couriers/me/location`, `/api/couriers/me/assignments/:id/*`, `/api/orders/:id/courier-location`                                                     | Courier availability, delivery assignment/status, protected location                |
+| Analytics (9)             | `/api/admin/analytics/*`, `/api/restaurants/:id/analytics/*`                                                                                                                         | Platform and per-restaurant order/revenue/product analytics                         |
+| Health (10)               | `/api/health`                                                                                                                                                                        | Liveness/readiness probe (verifies live DB and Redis connectivity)                  |
 
 ## Implementation Phases
 
-1. **Foundation** — scaffold, Docker, Prisma schema, auth, RBAC ✅
-2. **Uzbekistan location hierarchy, addresses, map abstraction, restaurants/branches** ✅ _(this phase)_
-3. Menus, products, images, search, filters
-4. Cart, server-side pricing, delivery zones, checkout
-5. Orders, restaurant dashboard, realtime status
-6. Admin panel
-7. Payments, promotions, reviews, favorites, notifications
-8. Courier architecture
-9. Analytics, security hardening, audit logs
-10. Tests, optimization, production build, Docker verification, deployment docs
+1. Foundation — scaffold, Docker, Prisma schema, auth, RBAC ✅
+2. Uzbekistan location hierarchy, addresses, map abstraction, restaurants/branches ✅
+3. Menus, products, images, search, filters ✅
+4. Cart, server-side pricing, delivery zones, checkout ✅
+5. Orders, restaurant dashboard, realtime status ✅
+6. Admin panel ✅
+7. Payments, promotions, reviews, favorites, notifications ✅
+8. Courier architecture ✅
+9. Analytics, security hardening, audit logs ✅
+10. Tests, optimization, production build, Docker verification, deployment docs ✅
+
+## Verification
+
+Every commit on every branch runs the full CI pipeline
+(`.github/workflows/ci.yml`) on GitHub-hosted runners:
+
+1. `npm install` (no lock file is committed yet — see below)
+2. `npm run lint` (ESLint)
+3. `npm run format:check` (Prettier)
+4. `npm run prisma:validate` (schema syntax/relations)
+5. `npm run typecheck` (`tsc --noEmit`, strict mode)
+6. `npm run prisma:migrate:deploy` against a real ephemeral PostgreSQL service
+7. `npm run test` (Vitest, unit tests for all pure business logic — pricing,
+   the order status state machine, geospatial delivery-zone math, search
+   text normalization, promo code discount calculation, and real payment
+   webhook signature verification for both Payme and Click)
+8. `npm run build` (production Next.js build)
+9. A second CI job builds the production and development Docker images from
+   this repo's `Dockerfile`, then brings up the full `docker-compose.yml`
+   stack (app + Postgres + Redis + MinIO) and polls `GET /api/health` until
+   the app reports both its database and Redis connections are live.
+
+This is real, automated, repository-hosted verification — not a
+self-reported claim. Check the Actions tab on GitHub for the actual
+pass/fail status and logs of any commit.
+
+**What this does not cover:** the real Payme/Click merchant integrations
+have no live credentials to test end-to-end against the actual payment
+gateways (the signature verification logic is implemented against each
+provider's publicly documented contract and unit tested, but has never
+processed a real transaction); no `package-lock.json` is committed yet
+(generated on first `npm install` — CI intentionally uses `npm install`
+rather than `npm ci` until one exists, then should switch back); and this
+is unit/integration-level test coverage of business logic, not full
+end-to-end browser tests of the (not yet built) UI layer.
 
 ## Troubleshooting
 
