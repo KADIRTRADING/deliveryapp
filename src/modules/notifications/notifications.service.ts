@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { NotificationType } from "@prisma/client";
+import type { NotificationType, Prisma } from "@prisma/client";
 
 /**
  * In-app notification persistence. Per "Support in-app notifications for
@@ -26,7 +26,7 @@ export interface NotifyInput {
   bodyUz: string;
   bodyRu: string;
   bodyEn: string;
-  data?: Record<string, unknown> | null;
+  data?: Prisma.InputJsonValue | null;
 }
 
 export async function notifyUser(input: NotifyInput): Promise<void> {

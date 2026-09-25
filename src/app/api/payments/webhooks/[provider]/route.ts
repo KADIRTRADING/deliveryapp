@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPaymentProviderByKind } from "@/modules/payments/index";
 import { handleVerifiedPaymentEvent } from "@/modules/payments/payments.service";
 import { writeAuditLog } from "@/modules/admin/audit-log.service";
-import type { PaymentProviderKind } from "@prisma/client";
+import type { PaymentProviderKind, Prisma } from "@prisma/client";
 
 interface RouteParams {
   params: Promise<{ provider: string }>;
@@ -82,9 +82,9 @@ function resolveProviderKind(param: string): PaymentProviderKind | null {
   return null;
 }
 
-function safeJsonParse(raw: string): unknown {
+function safeJsonParse(raw: string): Prisma.InputJsonValue {
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as Prisma.InputJsonValue;
   } catch {
     // Click sends form-encoded bodies, not JSON — store as a plain object.
     return Object.fromEntries(new URLSearchParams(raw));

@@ -57,7 +57,10 @@ export class ClickPaymentProvider implements PaymentProvider {
     return { redirectUrl: url.toString() };
   }
 
-  async verifyWebhookSignature(rawBody: string): Promise<WebhookVerificationResult> {
+  async verifyWebhookSignature(
+    rawBody: string,
+    _headers: Headers,
+  ): Promise<WebhookVerificationResult> {
     let fields: Partial<ClickWebhookFields>;
     try {
       fields = parseClickBody(rawBody);

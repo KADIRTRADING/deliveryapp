@@ -29,7 +29,10 @@ export class MockPaymentProvider implements PaymentProvider {
     return { redirectUrl: url.toString(), providerReference: `mock_${input.orderId}` };
   }
 
-  async verifyWebhookSignature(rawBody: string): Promise<WebhookVerificationResult> {
+  async verifyWebhookSignature(
+    rawBody: string,
+    _headers: Headers,
+  ): Promise<WebhookVerificationResult> {
     // The mock "webhook" is not signed (there is no external gateway to
     // sign anything) — it is trusted only because it originates from our
     // own dev-only completion endpoint, which itself requires an
