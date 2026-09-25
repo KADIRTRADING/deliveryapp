@@ -9,8 +9,9 @@ const nextConfig: NextConfig = {
   // production Dockerfile stage, so the runtime image doesn't need the full
   // node_modules tree or the Next.js CLI.
   output: "standalone",
-  // Images are served through our own StorageProvider abstraction (S3 / MinIO),
-  // so remote patterns are driven by env-configured public endpoints only.
+  // Images are served through our own StorageProvider abstraction (S3 /
+  // RustFS locally), so remote patterns are driven by env-configured
+  // public endpoints only.
   images: {
     remotePatterns: [
       {
