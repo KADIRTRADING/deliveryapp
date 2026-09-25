@@ -106,6 +106,15 @@ export async function updateRestaurantStatus(
   return prisma.restaurant.update({ where: { id: restaurantId }, data: { status } });
 }
 
+/** Admin-only: set the platform commission rate for a restaurant, in basis points (e.g. 1500 = 15.00%). */
+export async function updateRestaurantCommission(restaurantId: string, commissionBps: number) {
+  const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
+  if (!restaurant || restaurant.deletedAt) {
+    throw ApiError.notFound("Restaurant not found");
+  }
+  return prisma.restaurant.update({ where: { id: restaurantId }, data: { commissionBps } });
+}
+
 /**
  * Fetch a restaurant for a management/dashboard context (owner/staff/admin).
  * Unlike the public getRestaurantBySlug below, this does not filter by
