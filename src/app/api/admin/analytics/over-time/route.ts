@@ -1,0 +1,21 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireRole } from "@/modules/auth/rbac";
+import { getOrdersOverTime } from "@/modules/analytics/admin-analytics.service";
+import { dateRangeQuerySchema, resolveDateRange } from "@/modules/analytics/schemas";
+import { handleApiError } from "@/lib/api-error";
+
+/** GET /api/admin/analytics/over-time — daily order count/GMV time series. Admin only. */
+export async function GET(req: NextRequest) {
+  try {
+    await requireRole("ADMIN", "SUPER_ADMIN");
+    const query = dateRangeQuerySchema.parse({
+      from: req.nextUrl.searchParams.get("from") ?? undefined,
+      to: req.nextUrl.searchParams.get("to") ?? undefined,
+    });
+
+    const series = await getOrdersOverTime(resolveDateRange(query));
+    return NextResponse.json({ series }, { status: 200 });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}

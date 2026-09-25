@@ -6,14 +6,16 @@ hierarchy, server-authoritative pricing, and provider abstractions for
 payments, maps, object storage, and SMS so real vendor integrations can be
 dropped in without touching business logic.
 
-> **Status:** Phase 2 of 10 (see [Implementation Phases](#implementation-phases)).
-> Delivered so far: project scaffold, Docker Compose stack, full domain
-> schema (Prisma), authentication, RBAC, the `/auth`/`/users` API surface,
-> the Uzbekistan region/city/district location hierarchy, address CRUD, a
-> MapProvider abstraction (geocoding/reverse-geocoding), and restaurant/
-> branch/delivery-zone management with real geofenced discovery. Menus,
-> cart/checkout, orders, payments, courier workflow, and the admin panel are
-> built out in subsequent phases.
+> **Status:** Phase 9 of 10 (see [Implementation Phases](#implementation-phases)).
+> The full platform is functionally complete: authentication/RBAC, the
+> Uzbekistan location hierarchy, restaurant/branch/delivery-zone management
+> with real geofenced discovery, menus/products/search, cart/checkout with
+> server-authoritative pricing, the order lifecycle state machine with
+> realtime status and a restaurant dashboard, the admin panel, payments
+> (Payme/Click adapters with real signature verification) and promotions,
+> reviews/favorites/notifications, courier delivery workflow, and platform/
+> restaurant analytics. Phase 10 remains: broader automated test coverage,
+> final Docker verification, and deployment documentation.
 
 ## Table of Contents
 
@@ -224,6 +226,21 @@ when a service module is imported directly in a unit test.
 - **Environment validation:** `src/lib/env.ts` validates all configuration
   with Zod at startup; production credential presence is asserted per
   provider before that provider is used for a sensitive operation.
+- **HTTP security headers:** `next.config.ts` sets `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, a strict `Referrer-Policy`, and a
+  restrictive `Permissions-Policy` on every response.
+- **SQL injection / XSS:** all database access goes through Prisma's
+  parameterized query builder (no raw SQL anywhere in the codebase); all
+  UI rendering goes through React/Next.js's default escaping (no
+  `dangerouslySetInnerHTML` anywhere in the codebase).
+- **Rate limiting coverage:** beyond auth/OTP, sensitive/billable actions
+  are separately throttled — checkout, promo code attempts (a small,
+  guessable code space), online payment initiation, geocoding (a paid
+  external API in production), and presigned upload requests.
+- **Safe error responses:** `handleApiError` (src/lib/api-error.ts) is the
+  single response path for every route handler; unexpected errors are
+  logged server-side but only ever return an opaque `INTERNAL_ERROR` to
+  the client — no stack trace, SQL, or file path is ever returned.
 
 ## Provider Abstractions
 

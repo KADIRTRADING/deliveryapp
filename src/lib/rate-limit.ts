@@ -57,6 +57,16 @@ export const RateLimits = {
   // Geocoding calls a paid external API in production (Mapbox); throttle
   // per-IP to bound cost exposure from a single abusive client.
   geocodePerIp: (ip: string) => rateLimit(`geocode:ip:${ip}`, 30, 60),
+  // Initiating a payment session with a real provider (Payme/Click) is a
+  // billable/quota-consuming call against that provider in production;
+  // throttle per-user to bound abuse (e.g. rapidly re-initiating the same
+  // order's payment in a loop).
+  paymentInitiatePerUser: (userId: string) => rateLimit(`payment:initiate:${userId}`, 10, 10 * 60),
+  // A promo code is a small, guessable secret space (see
+  // createPromoCodeSchema — 3-30 uppercase alphanumeric chars); without a
+  // limit here, an attacker could brute-force valid codes by trying many
+  // per checkout attempt.
+  promoCodeAttemptPerUser: (userId: string) => rateLimit(`promo:attempt:${userId}`, 20, 10 * 60),
 };
 
 export function getClientIp(headers: Headers): string {

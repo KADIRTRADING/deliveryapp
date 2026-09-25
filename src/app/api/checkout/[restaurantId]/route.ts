@@ -30,6 +30,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const body = await req.json();
     const input = checkoutSchema.parse(body);
 
+    if (input.promoCode) {
+      // A promo code is a small, guessable secret space — throttle attempts
+      // separately from the general write rate limit above so a burst of
+      // wrong-code guesses can't hide inside normal checkout traffic.
+      const promoLimit = await RateLimits.promoCodeAttemptPerUser(session.user.id);
+      if (!promoLimit.allowed) {
+        throw ApiError.tooManyRequests("Too many promo code attempts. Try again shortly.");
+      }
+    }
+
     const order = await checkout(session.user.id, restaurantId, input);
 
     return NextResponse.json({ order }, { status: 201 });
