@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
+import { SessionProvider } from "@/components/session-provider";
+import { CartProvider } from "@/components/cart-provider";
+import { AppHeader } from "@/components/app-header";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +20,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale}>
       <body className="min-h-screen">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          {children}
+          <SessionProvider>
+            <CartProvider>
+              <AppHeader />
+              {children}
+            </CartProvider>
+          </SessionProvider>
         </NextIntlClientProvider>
       </body>
     </html>
