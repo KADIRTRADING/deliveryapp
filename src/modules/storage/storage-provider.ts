@@ -85,21 +85,37 @@ class MockStorageProvider implements StorageProvider {
 
 /**
  * S3-compatible adapter. Works against real AWS S3 as well as any
- * S3-compatible endpoint (MinIO for local Docker development, DigitalOcean
+ * S3-compatible endpoint (RustFS for local Docker development, DigitalOcean
  * Spaces, etc.) via S3_ENDPOINT + S3_FORCE_PATH_STYLE.
+ *
+ * Credentials: `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` are only used when
+ * BOTH are actually set (the local RustFS/MinIO/DO-Spaces case, where there
+ * is no IAM role to assume). On AWS, the recommended production
+ * configuration is to leave both unset and instead grant the ECS task an
+ * IAM role with S3 permissions — omitting `credentials` entirely here lets
+ * the AWS SDK v3's default credential provider chain resolve credentials
+ * itself (ECS container credentials / EC2 instance metadata / environment),
+ * which is more secure than a long-lived static access key baked into
+ * environment variables and never needs manual rotation.
  */
 class S3StorageProvider implements StorageProvider {
   private client: S3Client;
 
   constructor() {
+    const hasStaticCredentials = Boolean(env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY);
+
     this.client = new S3Client({
       region: env.S3_REGION,
-      endpoint: env.S3_ENDPOINT,
+      ...(env.S3_ENDPOINT ? { endpoint: env.S3_ENDPOINT } : {}),
       forcePathStyle: env.S3_FORCE_PATH_STYLE,
-      credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID ?? "",
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? "",
-      },
+      ...(hasStaticCredentials
+        ? {
+            credentials: {
+              accessKeyId: env.S3_ACCESS_KEY_ID as string,
+              secretAccessKey: env.S3_SECRET_ACCESS_KEY as string,
+            },
+          }
+        : {}),
     });
   }
 
@@ -133,12 +149,12 @@ export function getStorageProvider(): StorageProvider {
   if (cachedProvider) return cachedProvider;
 
   if (env.STORAGE_PROVIDER === "s3") {
-    assertProductionCredentials("S3 storage", [
-      env.S3_BUCKET,
-      env.S3_ACCESS_KEY_ID,
-      env.S3_SECRET_ACCESS_KEY,
-      env.S3_PUBLIC_BASE_URL,
-    ]);
+    // Bucket + public base URL are always required. Access key/secret are
+    // deliberately NOT required here — on AWS the task's IAM role provides
+    // credentials (see S3StorageProvider above); requiring a static key
+    // pair would force a less secure configuration on the platform's
+    // primary deployment target.
+    assertProductionCredentials("S3 storage", [env.S3_BUCKET, env.S3_PUBLIC_BASE_URL]);
     cachedProvider = new S3StorageProvider();
   } else {
     cachedProvider = new MockStorageProvider();

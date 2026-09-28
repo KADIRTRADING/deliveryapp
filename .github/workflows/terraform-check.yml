@@ -1,0 +1,50 @@
+name: Terraform Check
+
+# Validates the AWS infrastructure code on every change to
+# infra/aws/terraform/** — this sandbox environment cannot install/run
+# Terraform locally (no package-registry network access; see
+# docs/AWS_DEPLOYMENT.md), so this workflow is the only place this
+# configuration is actually checked before being applied to a real AWS
+# account. It never runs `terraform apply` or `plan` against a live AWS
+# account — no AWS credentials are configured for this workflow at all —
+# it only confirms the configuration is syntactically valid and internally
+# consistent (provider/resource references resolve, required arguments are
+# present, etc).
+
+on:
+  push:
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/terraform-check.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/terraform-check.yml"
+
+jobs:
+  validate:
+    name: fmt + validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/aws/terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      # Cosmetic only (alignment/spacing) — never blocks the build. The
+      # meaningful correctness gate is `terraform validate` below.
+      - name: Terraform format check (informational)
+        run: terraform fmt -check -recursive -diff
+        continue-on-error: true
+
+      - name: Terraform init (no backend, providers only)
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate

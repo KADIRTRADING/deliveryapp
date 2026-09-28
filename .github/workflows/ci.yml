@@ -105,6 +105,13 @@ jobs:
       - name: Build development image
         run: docker build --target development -t deliveryapp:ci-check-dev .
 
+      # Same image .github/workflows/deploy-aws.yml pushes to ECR for the
+      # one-off migrate/seed ECS tasks (see Dockerfile's `migrator` stage
+      # comment) — verified here too so a break isn't discovered only
+      # during a real AWS deploy.
+      - name: Build migrator image
+        run: docker build --target migrator -t deliveryapp:ci-check-migrator .
+
       - name: Start full stack via docker compose
         run: docker compose up -d --build
 

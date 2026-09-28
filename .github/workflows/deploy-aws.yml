@@ -1,0 +1,186 @@
+name: Deploy to AWS
+
+# Manually-triggered deploy pipeline: build the production Docker image,
+# push it to ECR, run pending Prisma migrations as a one-off ECS task, then
+# roll the ECS service to the new image with a health-checked, automatically
+# rolled-back deployment.
+#
+# This is deliberately `workflow_dispatch`-only (not automatic on every push
+# to main) — deploying to a real, money-handling production environment
+# should be an explicit action, not an automatic side effect of merging a
+# PR. Run it from the Actions tab once the AWS infrastructure exists (see
+# docs/AWS_DEPLOYMENT.md).
+#
+# Authentication: no AWS access key is stored as a GitHub secret. This
+# workflow assumes an IAM role via OpenID Connect (see
+# infra/aws/terraform/github_oidc.tf) — the role can only be assumed by a
+# workflow run from this exact repo + branch, and the resulting credentials
+# are scoped to exactly the actions below (see that file's IAM policy).
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag to apply to the pushed image (defaults to the commit SHA)."
+        required: false
+        default: ""
+
+permissions:
+  id-token: write # required for the OIDC AssumeRoleWithWebIdentity call
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  ECS_APP_TASK_FAMILY: ${{ vars.ECS_APP_TASK_FAMILY }}
+  ECS_MIGRATE_TASK_FAMILY: ${{ vars.ECS_MIGRATE_TASK_FAMILY }}
+  ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+  ECS_SECURITY_GROUP: ${{ vars.ECS_SECURITY_GROUP }}
+
+jobs:
+  deploy:
+    name: Build, push, migrate, deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_SHA::12}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build production image
+        run: |
+          docker build --target production \
+            -t "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}" \
+            -t "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest" \
+            .
+
+      # Separate, larger image carrying the Prisma CLI + devDependencies
+      # (see the Dockerfile's `migrator` stage comment) — used only by the
+      # one-off migrate/seed ECS tasks, never by the long-running app
+      # service.
+      - name: Build migrator image
+        run: |
+          docker build --target migrator \
+            -t "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}-migrator" \
+            .
+
+      - name: Push images to ECR
+        run: |
+          docker push "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}"
+          docker push "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
+          docker push "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}-migrator"
+
+      # Register a new revision of the migrate task definition pointing at
+      # the freshly-pushed image, then run it once and wait for it to
+      # finish. If the migration fails, the job stops here — the app
+      # service (still on its old, working image) is never touched.
+      - name: Run database migrations
+        run: |
+          set -euo pipefail
+
+          CURRENT_TASKDEF=$(aws ecs describe-task-definition \
+            --task-definition "${{ env.ECS_MIGRATE_TASK_FAMILY }}" \
+            --query 'taskDefinition')
+
+          NEW_CONTAINER_DEFS=$(echo "$CURRENT_TASKDEF" | jq --arg IMAGE "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}-migrator" \
+            '.containerDefinitions | map(.image = $IMAGE)')
+
+          NEW_TASKDEF_ARN=$(aws ecs register-task-definition \
+            --family "${{ env.ECS_MIGRATE_TASK_FAMILY }}" \
+            --task-role-arn "$(echo "$CURRENT_TASKDEF" | jq -r '.taskRoleArn')" \
+            --execution-role-arn "$(echo "$CURRENT_TASKDEF" | jq -r '.executionRoleArn')" \
+            --network-mode "$(echo "$CURRENT_TASKDEF" | jq -r '.networkMode')" \
+            --requires-compatibilities FARGATE \
+            --cpu "$(echo "$CURRENT_TASKDEF" | jq -r '.cpu')" \
+            --memory "$(echo "$CURRENT_TASKDEF" | jq -r '.memory')" \
+            --container-definitions "$NEW_CONTAINER_DEFS" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          echo "Registered $NEW_TASKDEF_ARN — running migration task..."
+
+          RUN_TASK_OUTPUT=$(aws ecs run-task \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --launch-type FARGATE \
+            --task-definition "$NEW_TASKDEF_ARN" \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ env.ECS_SUBNETS }}],securityGroups=[${{ env.ECS_SECURITY_GROUP }}],assignPublicIp=DISABLED}")
+
+          TASK_ARN=$(echo "$RUN_TASK_OUTPUT" | jq -r '.tasks[0].taskArn')
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "null" ]; then
+            echo "Failed to start migration task:"
+            echo "$RUN_TASK_OUTPUT" | jq '.failures'
+            exit 1
+          fi
+
+          echo "Migration task started: $TASK_ARN — waiting for it to stop..."
+          aws ecs wait tasks-stopped --cluster "${{ env.ECS_CLUSTER }}" --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "${{ env.ECS_CLUSTER }}" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration task exited with code $EXIT_CODE — aborting deploy."
+            echo "Check the CloudWatch log group for /ecs/*/migrate for details."
+            exit 1
+          fi
+
+          echo "Migration completed successfully."
+
+      # Register a new revision of the app task definition pointing at the
+      # new image, then update the service to use it. ECS handles the
+      # rolling deployment (see deployment_minimum/maximum_percent and the
+      # deployment_circuit_breaker configured in infra/aws/terraform/ecs.tf
+      # — a failing health check automatically rolls the service back to
+      # its previous task definition without any action needed here).
+      - name: Deploy new app task definition
+        run: |
+          set -euo pipefail
+
+          CURRENT_TASKDEF=$(aws ecs describe-task-definition \
+            --task-definition "${{ env.ECS_APP_TASK_FAMILY }}" \
+            --query 'taskDefinition')
+
+          NEW_CONTAINER_DEFS=$(echo "$CURRENT_TASKDEF" | jq --arg IMAGE "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}" \
+            '.containerDefinitions | map(.image = $IMAGE)')
+
+          NEW_TASKDEF_ARN=$(aws ecs register-task-definition \
+            --family "${{ env.ECS_APP_TASK_FAMILY }}" \
+            --task-role-arn "$(echo "$CURRENT_TASKDEF" | jq -r '.taskRoleArn')" \
+            --execution-role-arn "$(echo "$CURRENT_TASKDEF" | jq -r '.executionRoleArn')" \
+            --network-mode "$(echo "$CURRENT_TASKDEF" | jq -r '.networkMode')" \
+            --requires-compatibilities FARGATE \
+            --cpu "$(echo "$CURRENT_TASKDEF" | jq -r '.cpu')" \
+            --memory "$(echo "$CURRENT_TASKDEF" | jq -r '.memory')" \
+            --container-definitions "$NEW_CONTAINER_DEFS" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          echo "Registered $NEW_TASKDEF_ARN — updating service..."
+
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
+            --task-definition "$NEW_TASKDEF_ARN" \
+            --force-new-deployment > /dev/null
+
+          echo "Waiting for the service to reach a stable state (new tasks healthy, old tasks drained)..."
+          aws ecs wait services-stable --cluster "${{ env.ECS_CLUSTER }}" --services "${{ env.ECS_SERVICE }}"
+
+          echo "Deploy complete. New image: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}"

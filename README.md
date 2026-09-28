@@ -29,6 +29,7 @@ deploy` → test → production build → Docker build/compose smoke test) is
 - [Environment Variables](#environment-variables)
 - [Database](#database)
 - [Docker](#docker)
+- [Deploying to AWS](#deploying-to-aws)
 - [Testing](#testing)
 - [Security Model](#security-model)
 - [Provider Abstractions](#provider-abstractions)
@@ -179,7 +180,30 @@ This starts the app, PostgreSQL, Redis, and RustFS together. The `app`
 service runs migrations automatically before starting the dev server (see
 `docker-compose.yml`). The production `Dockerfile` builds a minimal
 standalone Next.js server image (multi-stage; final image contains no
-dev dependencies or source maps).
+dev dependencies or source maps). A third `migrator` stage (Prisma CLI +
+`tsx`, no `next build`) exists solely for one-off migration/seed tasks in
+production — see [Deploying to AWS](#deploying-to-aws).
+
+## Deploying to AWS
+
+Production infrastructure-as-code (VPC, ECS Fargate, RDS Postgres,
+ElastiCache Redis, S3 + CloudFront, Secrets Manager, GitHub Actions OIDC
+deploy role) lives in [`infra/aws/terraform/`](infra/aws/terraform), and a
+`workflow_dispatch` deploy pipeline lives in
+[`.github/workflows/deploy-aws.yml`](.github/workflows/deploy-aws.yml).
+
+**Full step-by-step instructions — account setup, `terraform apply`,
+wiring up CI/CD, first deploy, seeding, custom domain, going live with real
+payment/map/SMS providers, monitoring, rotating secrets, and teardown — are
+in [`docs/AWS_DEPLOYMENT.md`](docs/AWS_DEPLOYMENT.md).**
+
+The app is reachable over real HTTPS at a free `*.cloudfront.net` URL
+immediately after `terraform apply` — no domain purchase required (a custom
+domain is an optional later step). Every Terraform change is validated on
+every push via `.github/workflows/terraform-check.yml` (`terraform
+validate`), the only place this configuration is actually checked before
+being applied to a real AWS account, matching how `.github/workflows/ci.yml`
+is the only place the application's own Docker images are actually built.
 
 ## Testing
 

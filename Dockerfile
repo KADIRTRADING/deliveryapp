@@ -35,6 +35,19 @@ RUN npx prisma generate
 EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
+# ---- migrator ------------------------------------------------------------
+# Used for one-off ECS tasks that need the Prisma CLI and/or `npm run
+# db:seed` (which requires `tsx`, a devDependency) — the `production`
+# target below intentionally strips both, since the long-running app
+# server itself only ever calls the Prisma *client* (already vendored into
+# .next/standalone via node_modules/.prisma), never the CLI. Keeping this
+# as its own stage (rather than reusing `build`) avoids needing to run
+# `next build` just to run a migration or seed script.
+FROM deps AS migrator
+COPY . .
+RUN npx prisma generate
+CMD ["npx", "prisma", "migrate", "deploy"]
+
 # ---- build -------------------------------------------------------------------
 FROM deps AS build
 COPY . .
