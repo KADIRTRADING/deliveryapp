@@ -49,7 +49,19 @@ RUN npx prisma generate
 CMD ["npx", "prisma", "migrate", "deploy"]
 
 # ---- build -------------------------------------------------------------------
+# `next build`'s "Collecting page data" step imports every route module to
+# determine its runtime, which transitively imports src/lib/env.ts — whose
+# Zod schema requires DATABASE_URL to be a non-empty string (see that
+# file). No real database connection is ever made at build time (nothing
+# here runs a query), so a syntactically-valid placeholder is sufficient;
+# this ARG/ENV pair exists ONLY in this build stage's image layer and is
+# never copied into the `production` stage below (COPY --from=build only
+# copies specific file paths, never environment variables), so the real
+# runtime DATABASE_URL (injected via Secrets Manager in production — see
+# infra/aws/terraform/ecs.tf) is what the running container actually uses.
 FROM deps AS build
+ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
+ENV DATABASE_URL=${DATABASE_URL}
 COPY . .
 RUN npx prisma generate
 RUN npm run build
