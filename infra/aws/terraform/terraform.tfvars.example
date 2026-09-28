@@ -1,0 +1,51 @@
+# Copy this file to terraform.tfvars and fill in the values marked
+# REQUIRED. Everything else has a safe default and can be left as-is for a
+# first deployment. See docs/AWS_DEPLOYMENT.md for the full walkthrough.
+
+# REQUIRED — must match the GitHub repo this code lives in, exactly as
+# "owner/repo" (e.g. "KADIRTRADING/deliveryapp"). Used only to scope the
+# GitHub OIDC trust policy in github_oidc.tf — nothing else.
+github_repository = "KADIRTRADING/deliveryapp"
+
+# Which branch's workflow runs are allowed to deploy. Should match your
+# repo's actual default/deploy branch.
+github_deploy_branch = "main"
+
+aws_region   = "us-east-1"
+environment  = "production"
+project_name = "deliveryapp"
+
+# Optional: subscribe an email address to deploy/health alarms (ALB 5xx
+# spikes, no healthy tasks, low RDS storage). You'll get an SNS
+# confirmation email after the first `terraform apply` — you must click
+# the confirmation link for the subscription to become active.
+alert_email = ""
+
+# Optional: serve the app on a custom domain instead of the default
+# *.cloudfront.net URL. Requires an ACM certificate already issued in
+# us-east-1 covering this domain (see docs/AWS_DEPLOYMENT.md "Custom
+# domain" section for the exact aws CLI commands) — leave both empty to
+# skip this entirely; the app is fully functional on its CloudFront URL
+# with no domain purchase required.
+domain_name         = ""
+acm_certificate_arn = ""
+
+# Provider credentials — leave every one of these empty for a first
+# deployment. The platform runs completely functionally with mock
+# providers (fake payment confirmation page, stub geocoding, OTPs logged
+# instead of texted). Fill these in only once you have real merchant/API
+# credentials, then re-run `terraform apply` — see docs/AWS_DEPLOYMENT.md
+# "Going live with real providers".
+payment_default_provider = "mock"
+payme_merchant_id        = ""
+payme_secret_key         = ""
+click_merchant_id        = ""
+click_service_id         = ""
+click_secret_key         = ""
+
+map_provider         = "mock"
+mapbox_server_token  = ""
+
+sms_provider   = "console"
+eskiz_email    = ""
+eskiz_password = ""

@@ -1,0 +1,18 @@
+# Local Terraform state and working files must never be committed — state
+# contains plaintext secrets (see secrets.tf's comment) and .terraform/
+# holds downloaded provider binaries that don't belong in version control.
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored — it should be
+# committed so every `terraform init` (local or in CI) resolves the exact
+# same provider versions.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Real variable values (may contain sensitive defaults you don't want
+# committed even before they reach state) — copy terraform.tfvars.example
+# to terraform.tfvars locally/in CI and never commit the real file.
+terraform.tfvars
+*.auto.tfvars
